@@ -196,7 +196,7 @@ Type alias: `RawBlock = RawParagraph | RawTable`. Используется в `R
 
 #### `NumberingData`
 
-`@dataclass(frozen=True)`. Продукт `NumberingResolver` для одного `block_id`.
+`@dataclass(frozen=True)`. Продукт `NumberingResolver` для одного `block_id`. Это результат ранней нормализации автонумерации: номер, который в Word физически живёт в `numbering.xml` / `numPr`, материализуется в статический `rendered_number` внутри нашей модели до сегментации. Исходный `.docx` при этом не переписывается.
 
 | Поле | Тип |
 |---|---|
@@ -391,12 +391,23 @@ class RevisionResolver:
 
 ### 5.3. `parsing/numbering.py` — `NumberingResolver`
 
-Фасад над `docx2python.list_position`.
+Фасад над `docx2python.list_position` и одновременно **первый проход нормализации автонумерации**.
 
 ```python
 class NumberingResolver:
     def resolve(self, raw_doc: RawDocument) -> NumberingResolveResult: ...
 ```
+
+**Цель прохода:** как можно раньше превратить Word auto-numbering в статический `rendered_number` на уровне `NumberingData`, чтобы downstream-компоненты работали не с `numbering.xml` / `numPr`, а с уже материализованной строкой вроде `"2.1.3."`.
+
+Это не физическая операция «convert numbering to text» над исходным `.docx`. Runtime не вызывает Word, LibreOffice, `soffice`, .NET или системные утилиты. Нормализация происходит только внутри intermediate model:
+
+- `RawParagraph.num_id` / `RawParagraph.ilvl` остаются сырыми OOXML-ссылками.
+- `NumberingResolver` вычисляет `NumberingData.rendered_number`.
+- `ParagraphEnricher` переносит `rendered_number` в `EnrichedParagraph`.
+- `ClauseSegmenter`, `ProtocolBuilder`, UI и экспорт используют `rendered_number` как статический label пункта.
+
+В v1 `rendered_number` трактуется как номер текущей / accepted-проекции документа. Для `NEW_CLAUSE` и `DELETED_CLAUSE` действуют специальные правила `ProtocolBuilder` (см. § 5.6); отдельная реконструкция двух независимых numbering views (`original_number` / `accepted_number`) откладывается до dogfooding, если реальные документы покажут такую необходимость.
 
 **Маппинг `docx2python` → `block_id`:**
 
@@ -429,6 +440,8 @@ class ClauseSegmenter:
 На вход поступает интерливированная последовательность `EnrichedParagraph` и `EnrichedTable` в порядке документа (выход `ParagraphEnricher.enrich_all`). Сегментер сохраняет порядок и interleaving — таблицы попадают в `Clause.blocks` рядом с параграфами в том же месте, где они физически находятся в документе.
 
 **Определение `clause_level` для `EnrichedParagraph`:**
+
+`ClauseSegmenter` не вычисляет Word-нумерацию сам. Он получает уже материализованный статический `rendered_number` из раннего прохода `NumberingResolver` (§ 5.3) и использует его как обычный текстовый label.
 
 - Если есть `num_id` (`numPr` в OOXML) — `level = ilvl` (0-based).
 - Если `num_id == None`, но `rendered_number` определился через regex — `level = len(rendered_number.rstrip(".").split(".")) - 1` (например `"2.1.3"` → level 2).
@@ -727,6 +740,8 @@ Multipart upload. Проверки выполняются **строго в ук
 ### 6.2. Parse
 
 `OOXMLReader.read(path) -> raw_doc` → `RevisionResolver.extract(raw_doc) -> revision_result` → `NumberingResolver.resolve(raw_doc) -> numbering_result` → `ParagraphEnricher.enrich_all(raw_doc, revision_result, numbering_result) -> EnrichmentResult`.
+
+`NumberingResolver.resolve(...)` — это обязательный ранний проход нормализации автонумерации: все доступные Word auto-numbering значения материализуются в `NumberingData.rendered_number` до `ClauseSegmenter`. Дальше pipeline работает с этим номером как со статическим label, а не с `numbering.xml`. Исходный `.docx` не модифицируется.
 
 `EnrichmentResult.blocks` — `tuple[EnrichedBlock, ...]` с `EnrichedParagraph` и `EnrichedTable`, интерливированными в порядке документа.
 
@@ -1168,7 +1183,7 @@ MIT. Репозиторий публичный.
 |---|---|
 | `OOXMLReader` | Run Coalescing, table, empty paragraph, монотонность `block_id`; interleaved fixture (paragraph → table → paragraph) сохраняет порядок в `RawDocument.blocks`; `RawDocument.source_path` корректно возвращает абсолютный путь; **`RawTable.has_revisions = True`** для таблицы с `<w:ins>` / `<w:del>` внутри ячеек; `has_revisions = False` для таблицы без правок; `Run` НЕ содержит revision-полей (тексты внутри `<w:ins>` / `<w:del>` сохраняются как обычные `Run.text`); **параграфы внутри `<w:tc>` НЕ становятся top-level `RawParagraph`** (они доступны только через `RawTable.rows[i].cells[j].paragraphs`) |
 | `RevisionResolver` | insert, delete, replace, format-only; **return type — `RevisionResolveResult` с непустым `revision_map` и пустым `diagnostics` для well-formed документа**; пустой `revision_map` для документа без правок; маппинг по `i_para`-индексу среди top-level параграфов при interleaving с таблицами; **fallback при расхождении количества top-level paragraph-объектов**: unmapped `RawParagraph` получает `RevisionData(original_text=raw.text(), accepted_text=raw.text(), revisions=())` (НЕ пустые строки), `diagnostics` содержит `ResolverDiagnostic(code="REVISION_MAPPING_MISMATCH", severity="warning", metadata={...})` с корректным count'ом unmapped/expected/actual |
-| `NumberingResolver` | multi-level, restart, regex fallback, unmapped paragraph (расхождение docx2python ↔ OOXMLReader), confidence values; **return type — `NumberingResolveResult`**; `diagnostics` содержит `ResolverDiagnostic(code="NUMBERING_MAPPING_MISMATCH", ...)` при расхождении количества top-level paragraph-объектов |
+| `NumberingResolver` | multi-level, restart, regex fallback, unmapped paragraph (расхождение docx2python ↔ OOXMLReader), confidence values; **return type — `NumberingResolveResult`**; ранняя нормализация автонумерации: `rendered_number` материализуется как статический label в модели без физического изменения `.docx`; `diagnostics` содержит `ResolverDiagnostic(code="NUMBERING_MAPPING_MISMATCH", ...)` при расхождении количества top-level paragraph-объектов |
 | `ParagraphEnricher` | full enrichment, missing revision_map entry, missing numbering_map entry; interleaved input (paragraphs + tables) → output сохраняет порядок и тип `EnrichedParagraph` / `EnrichedTable`; `EnrichedTable.has_revisions` наследуется без изменений; **`EnrichmentResult.diagnostics` — корректная конкатенация `revision_result.diagnostics + numbering_result.diagnostics`** |
 | `ClauseSegmenter` | numbered → new clause; multi-paragraph (continuation присоединяется к top of stack); nested numbering (2 → 2.1 → 2.1.3 — стек открывается, `parent_id` правильный); закрытие при возврате на меньший уровень (после 2.1.3 встретился 3 — стек pop'ается до уровня 0); **table внутри clause (interleaved)** — `EnrichedTable` попадает в `Clause.blocks` рядом с параграфами в правильной позиции, `CONTAINS_TABLE` поднимается; **TABLE_CELL_REVISIONS поднимается на Clause, если хотя бы один вложенный `EnrichedTable.has_revisions == True`** (для standalone, преамбульного и numbered Clause); **STANDALONE_TABLE** — таблица между numbered clauses без context оформляется в sibling Clause с `label="Таблица"` и флагами `{STANDALONE_TABLE, CONTAINS_TABLE}`; preamble; **requisites detection по тексту параграфа** (триггерные подстроки `"реквизиты сторон"`, `"реквизиты"`, `"подписи сторон"`, `"подписи и реквизиты"`, `"адреса и реквизиты"`; case-insensitive; стили `style_id` НЕ используются; window — последние 30 top-level параграфов); приложения (маркер `Приложение № N`); NEW_CLAUSE; DELETED_CLAUSE |
 | `RussianPartyExtractor` | типовые преамбулы и edge cases |
