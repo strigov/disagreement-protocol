@@ -1,2 +1,36 @@
 .DS_Store
 **/.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment / local config
+.env
+.env.*
+!.env.example
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Generated / temporary artifacts
+tmp/
+temp/
+.cache/
+coverage/
+htmlcov/
+
+# Local research materials
+docs/brainstorming/Materials/
