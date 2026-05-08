@@ -1,3 +1,70 @@
+---
+slug: disagreement-protocol-mvp
+created: 2026-05-05
+status: in-progress
+phases:
+  - id: Ф0
+    scope: "Project bootstrap"
+    status: in-progress
+  - id: Ф1
+    scope: "OOXMLParser"
+    status: pending
+  - id: Ф2
+    scope: "RevisionResolver"
+    status: pending
+  - id: Ф3
+    scope: "NumberingResolver"
+    status: pending
+  - id: Ф4
+    scope: "ClauseSegmenter"
+    status: pending
+  - id: Ф5
+    scope: "ChangedClauseDetector"
+    status: pending
+  - id: Ф6
+    scope: "PartyExtractor"
+    status: pending
+  - id: Ф7
+    scope: "ProtocolRowBuilder"
+    status: pending
+  - id: Ф8
+    scope: "ValidationEngine"
+    status: pending
+  - id: Ф9
+    scope: "FastAPI app + Celery wiring + storage"
+    status: pending
+  - id: Ф10
+    scope: "Document upload + Celery pipeline task"
+    status: pending
+  - id: Ф11
+    scope: "Analysis endpoint + party confirmation"
+    status: pending
+  - id: Ф12
+    scope: "Protocol generation + row edit endpoints"
+    status: pending
+  - id: Ф13
+    scope: "DOCX export + download endpoint"
+    status: pending
+  - id: Ф14
+    scope: "Frontend bootstrap + API client"
+    status: pending
+  - id: Ф15
+    scope: "Upload screen"
+    status: pending
+  - id: Ф16
+    scope: "Preflight + Parties screens"
+    status: pending
+  - id: Ф17
+    scope: "Protocol table screen"
+    status: pending
+  - id: Ф18
+    scope: "Export screen"
+    status: pending
+  - id: Ф19
+    scope: "Fixtures + end-to-end integration test"
+    status: pending
+---
+
 # Disagreement Protocol MVP Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use dev-orchestrator (recommended) or executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
