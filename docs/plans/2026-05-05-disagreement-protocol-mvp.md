@@ -17,10 +17,10 @@ phases:
     status: done
   - id: Ф4
     scope: "ClauseSegmenter"
-    status: in-progress
+    status: done
   - id: Ф5
     scope: "ChangedClauseDetector"
-    status: pending
+    status: in-progress
   - id: Ф6
     scope: "PartyExtractor"
     status: pending
