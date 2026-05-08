@@ -23,10 +23,10 @@ phases:
     status: done
   - id: Ф6
     scope: "PartyExtractor"
-    status: in-progress
+    status: done
   - id: Ф7
     scope: "ProtocolRowBuilder"
-    status: pending
+    status: in-progress
   - id: Ф8
     scope: "ValidationEngine"
     status: pending
