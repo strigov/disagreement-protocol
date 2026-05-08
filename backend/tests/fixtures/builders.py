@@ -81,3 +81,23 @@ def build_docx_with_deletion(
     buf = BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def build_docx_with_manual_numbering(items: list[str]) -> bytes:
+    """Items already include literal numbers like '1.', '1.1.', '2.'."""
+    return build_simple_docx(items)
+
+
+def build_docx_with_unknown_numid(text: str, num_id: int = 999) -> bytes:
+    """Build a DOCX where a paragraph references a numId that does not exist in numbering.xml."""
+    doc = DocxDocument()
+    p = doc.add_paragraph(text)
+    pPr = p._p.get_or_add_pPr()
+    numPr = etree.SubElement(pPr, qn("w:numPr"))
+    ilvl = etree.SubElement(numPr, qn("w:ilvl"))
+    ilvl.set(qn("w:val"), "0")
+    numId = etree.SubElement(numPr, qn("w:numId"))
+    numId.set(qn("w:val"), str(num_id))
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()

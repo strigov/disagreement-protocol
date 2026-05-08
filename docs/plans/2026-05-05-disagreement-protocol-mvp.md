@@ -14,10 +14,10 @@ phases:
     status: done
   - id: Ф3
     scope: "NumberingResolver"
-    status: in-progress
+    status: done
   - id: Ф4
     scope: "ClauseSegmenter"
-    status: pending
+    status: in-progress
   - id: Ф5
     scope: "ChangedClauseDetector"
     status: pending
