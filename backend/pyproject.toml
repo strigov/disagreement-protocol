@@ -1,0 +1,48 @@
+[project]
+name = "disprot-backend"
+version = "0.1.0"
+description = "Disagreement protocol backend"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi==0.115.0",
+  "uvicorn[standard]==0.30.6",
+  "pydantic==2.9.2",
+  "pydantic-settings==2.5.2",
+  "sqlalchemy==2.0.35",
+  "alembic==1.13.3",
+  "psycopg[binary]==3.2.3",
+  "celery==5.4.0",
+  "redis==5.1.1",
+  "boto3==1.35.36",
+  "python-multipart==0.0.12",
+  "lxml==5.3.0",
+  "python-docx==1.1.2",
+  "docx-revisions==0.1.5",
+  "docx2python==2.10.1",
+  "docxtpl==0.18.0",
+  "rapidfuzz==3.10.0",
+  "diff-match-patch==20230430",
+  "natasha==1.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==8.3.3",
+  "pytest-cov==5.0.0",
+  "pytest-asyncio==0.24.0",
+  "httpx==0.27.2",
+  "ruff==0.6.9",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"

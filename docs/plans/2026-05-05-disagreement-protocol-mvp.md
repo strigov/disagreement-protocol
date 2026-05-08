@@ -5,10 +5,10 @@ status: in-progress
 phases:
   - id: Ф0
     scope: "Project bootstrap"
-    status: in-progress
+    status: done
   - id: Ф1
     scope: "OOXMLParser"
-    status: pending
+    status: in-progress
   - id: Ф2
     scope: "RevisionResolver"
     status: pending
