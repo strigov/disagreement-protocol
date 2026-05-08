@@ -8,10 +8,10 @@ phases:
     status: done
   - id: Ф1
     scope: "OOXMLParser"
-    status: in-progress
+    status: done
   - id: Ф2
     scope: "RevisionResolver"
-    status: pending
+    status: in-progress
   - id: Ф3
     scope: "NumberingResolver"
     status: pending
