@@ -29,10 +29,10 @@ phases:
     status: done
   - id: Ф8
     scope: "ValidationEngine"
-    status: in-progress
+    status: done
   - id: Ф9
     scope: "FastAPI app + Celery wiring + storage"
-    status: pending
+    status: in-progress
   - id: Ф10
     scope: "Document upload + Celery pipeline task"
     status: pending
