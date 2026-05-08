@@ -26,10 +26,10 @@ phases:
     status: done
   - id: Ф7
     scope: "ProtocolRowBuilder"
-    status: in-progress
+    status: done
   - id: Ф8
     scope: "ValidationEngine"
-    status: pending
+    status: in-progress
   - id: Ф9
     scope: "FastAPI app + Celery wiring + storage"
     status: pending
