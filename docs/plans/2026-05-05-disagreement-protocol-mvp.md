@@ -11,10 +11,10 @@ phases:
     status: done
   - id: Ф2
     scope: "RevisionResolver"
-    status: in-progress
+    status: done
   - id: Ф3
     scope: "NumberingResolver"
-    status: pending
+    status: in-progress
   - id: Ф4
     scope: "ClauseSegmenter"
     status: pending
