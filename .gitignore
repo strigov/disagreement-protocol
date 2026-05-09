@@ -4,6 +4,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -31,6 +32,9 @@ temp/
 .cache/
 coverage/
 htmlcov/
+node_modules/
+.next/
+*.tsbuildinfo
 
 # Local research materials
 docs/brainstorming/Materials/
