@@ -101,3 +101,102 @@ def build_docx_with_unknown_numid(text: str, num_id: int = 999) -> bytes:
     buf = BytesIO()
     doc.save(buf)
     return buf.getvalue()
+
+
+def build_autonumbering_contract() -> bytes:
+    """A contract with manual numeric labels '1.' / '1.1.' / '2.', one INS revision in clause 1.1."""
+    doc = DocxDocument()
+    doc.add_paragraph(
+        'ООО "Ромашка", в лице директора, именуемое в дальнейшем "Арендодатель", '
+        'и АО "Василёк", именуемое в дальнейшем "Арендатор", заключили настоящий договор.'
+    )
+    doc.add_paragraph("1. Предмет договора")
+    p = doc.add_paragraph("1.1. Исполнитель обязуется оказать услуги ")
+    pelem = p._p
+    ins = etree.SubElement(pelem, qn("w:ins"))
+    ins.set(qn("w:id"), "1")
+    ins.set(qn("w:author"), "Editor")
+    ins.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    r = etree.SubElement(ins, qn("w:r"))
+    t = etree.SubElement(r, qn("w:t"))
+    t.text = "качественно и в срок"
+    t.set(qn("xml:space"), "preserve")
+    doc.add_paragraph("2. Цена договора")
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_multipar_contract() -> bytes:
+    """A clause that spans 2 paragraphs."""
+    doc = DocxDocument()
+    doc.add_paragraph(
+        'ООО "А", именуемое в дальнейшем "Сторона1", и ООО "Б", именуемое в дальнейшем "Сторона2".'
+    )
+    doc.add_paragraph("1. Раздел один")
+    p = doc.add_paragraph("Дополнительный текст пункта ")
+    pelem = p._p
+    ins = etree.SubElement(pelem, qn("w:ins"))
+    ins.set(qn("w:id"), "1")
+    ins.set(qn("w:author"), "X")
+    ins.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    r = etree.SubElement(ins, qn("w:r"))
+    t = etree.SubElement(r, qn("w:t"))
+    t.text = "ВСТАВКА"
+    t.set(qn("xml:space"), "preserve")
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_new_clause_contract() -> bytes:
+    """A whole paragraph wrapped in <w:ins>."""
+    doc = DocxDocument()
+    doc.add_paragraph(
+        'ООО "А", именуемое в дальнейшем "Сторона1", и ООО "Б", именуемое в дальнейшем "Сторона2".'
+    )
+    doc.add_paragraph("1. Старый пункт")
+    p = doc.add_paragraph("")
+    pelem = p._p
+    ins = etree.SubElement(pelem, qn("w:ins"))
+    ins.set(qn("w:id"), "1")
+    ins.set(qn("w:author"), "X")
+    ins.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    r = etree.SubElement(ins, qn("w:r"))
+    t = etree.SubElement(r, qn("w:t"))
+    t.text = "2. Совершенно новый пункт"
+    t.set(qn("xml:space"), "preserve")
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_deleted_clause_contract() -> bytes:
+    """A whole paragraph wrapped in <w:del>."""
+    doc = DocxDocument()
+    doc.add_paragraph(
+        'ООО "А", именуемое в дальнейшем "Сторона1", и ООО "Б", именуемое в дальнейшем "Сторона2".'
+    )
+    doc.add_paragraph("1. Остающийся пункт")
+    p = doc.add_paragraph("")
+    pelem = p._p
+    deln = etree.SubElement(pelem, qn("w:del"))
+    deln.set(qn("w:id"), "1")
+    deln.set(qn("w:author"), "X")
+    deln.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    r = etree.SubElement(deln, qn("w:r"))
+    t = etree.SubElement(r, qn("w:delText"))
+    t.text = "2. Удаляемый пункт целиком"
+    t.set(qn("xml:space"), "preserve")
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_simple_contract_with_revision() -> bytes:
+    return build_docx_with_insertion(
+        'ООО "А", именуемое в дальнейшем "Сторона1", и ООО "Б", именуемое в дальнейшем "Сторона2". '
+        "1. Услуги оказываются ",
+        "вовремя",
+        ".",
+    )

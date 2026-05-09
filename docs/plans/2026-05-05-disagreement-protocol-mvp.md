@@ -1,7 +1,7 @@
 ---
 slug: disagreement-protocol-mvp
 created: 2026-05-05
-status: in-progress
+status: done
 phases:
   - id: Ф0
     scope: "Project bootstrap"
@@ -62,7 +62,7 @@ phases:
     status: done
   - id: Ф19
     scope: "Fixtures + end-to-end integration test"
-    status: in-progress
+    status: done
 ---
 
 # Disagreement Protocol MVP Implementation Plan
