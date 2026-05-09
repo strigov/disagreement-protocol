@@ -50,10 +50,10 @@ phases:
     status: done
   - id: Ф15
     scope: "Upload screen"
-    status: in-progress
+    status: done
   - id: Ф16
     scope: "Preflight + Parties screens"
-    status: pending
+    status: in-progress
   - id: Ф17
     scope: "Protocol table screen"
     status: pending
