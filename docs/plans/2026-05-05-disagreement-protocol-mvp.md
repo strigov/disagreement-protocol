@@ -41,10 +41,10 @@ phases:
     status: done
   - id: Ф12
     scope: "Protocol generation + row edit endpoints"
-    status: in-progress
+    status: done
   - id: Ф13
     scope: "DOCX export + download endpoint"
-    status: pending
+    status: in-progress
   - id: Ф14
     scope: "Frontend bootstrap + API client"
     status: pending
