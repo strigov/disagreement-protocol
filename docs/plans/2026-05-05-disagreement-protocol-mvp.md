@@ -44,10 +44,10 @@ phases:
     status: done
   - id: Ф13
     scope: "DOCX export + download endpoint"
-    status: in-progress
+    status: done
   - id: Ф14
     scope: "Frontend bootstrap + API client"
-    status: pending
+    status: in-progress
   - id: Ф15
     scope: "Upload screen"
     status: pending
