@@ -38,10 +38,10 @@ phases:
     status: done
   - id: Ф11
     scope: "Analysis endpoint + party confirmation"
-    status: in-progress
+    status: done
   - id: Ф12
     scope: "Protocol generation + row edit endpoints"
-    status: pending
+    status: in-progress
   - id: Ф13
     scope: "DOCX export + download endpoint"
     status: pending
