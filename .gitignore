@@ -38,3 +38,4 @@ node_modules/
 
 # Local research materials
 docs/brainstorming/Materials/
+docs/plans/*.ledger.json
