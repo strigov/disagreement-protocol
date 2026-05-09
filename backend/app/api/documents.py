@@ -8,7 +8,10 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.document import Document
 from app.models.enums import DocumentStatus
-from app.schemas.document import DocumentCreated
+from app.models.party import Party
+from app.schemas.document import AnalysisOut, DocumentCreated, PreflightDiagnostic, PreflightMetrics
+from app.schemas.party import PartiesUpdateIn, PartyOut
+from app.schemas.validation import ValidationReportOut
 from app.services.ingestion import MAX_BYTES, IngestError, derive_contract_name, validate_upload
 from app.services.storage import S3Storage
 from app.workers.tasks import process_document
@@ -45,3 +48,81 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
     db.commit()
     process_document.delay(str(doc_id))
     return DocumentCreated(id=doc_id, status=doc.status.value)
+
+
+@router.get("/{document_id}/analysis", response_model=AnalysisOut)
+def get_analysis(document_id: uuid.UUID, db: Session = Depends(get_db)) -> AnalysisOut:
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    parties = db.query(Party).filter(Party.document_id == document_id).all()
+    diagnostics_raw = ((doc.metadata_json or {}).get("preflight_diagnostics") or [])
+    return AnalysisOut(
+        id=doc.id,
+        status=doc.status.value,
+        contract_name=doc.contract_name,
+        preflight_metrics=PreflightMetrics(**doc.preflight_metrics) if doc.preflight_metrics else None,
+        preflight_diagnostics=[PreflightDiagnostic(**diagnostic) for diagnostic in diagnostics_raw],
+        parties=[
+            PartyOut(id=party.id, name=party.name, role=party.role, confidence=party.confidence)
+            for party in parties
+        ],
+        validation_report=ValidationReportOut(**doc.validation_report) if doc.validation_report else None,
+        drafting_party_id=doc.drafting_party_id,
+    )
+
+
+@router.patch("/{document_id}/parties", response_model=AnalysisOut)
+def update_parties(
+    document_id: uuid.UUID,
+    payload: PartiesUpdateIn,
+    db: Session = Depends(get_db),
+) -> AnalysisOut:
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    existing = {party.id: party for party in db.query(Party).filter(Party.document_id == document_id).all()}
+    if len(payload.parties) != 2:
+        raise HTTPException(status_code=422, detail="Exactly 2 parties are required")
+
+    existing_payload_ids = [item.id for item in payload.parties if item.id is not None and item.id in existing]
+    if len(existing_payload_ids) != len(set(existing_payload_ids)):
+        raise HTTPException(status_code=422, detail="Duplicate party ids in payload")
+
+    drafting_party = existing.get(payload.drafting_party_id) if payload.drafting_party_id is not None else None
+    if payload.drafting_party_id is not None:
+        drafting_party_matches = any(
+            drafting_party is not None
+            and item.id == payload.drafting_party_id
+            for item in payload.parties
+        )
+        if not drafting_party_matches:
+            raise HTTPException(
+                status_code=422,
+                detail="drafting_party_id must reference one of the confirmed parties",
+            )
+
+    if payload.drafting_party_id is None:
+        doc.drafting_party_id = None
+
+    seen_ids: set[uuid.UUID] = set()
+    for item in payload.parties:
+        if item.id and item.id in existing:
+            existing[item.id].name = item.name
+            existing[item.id].role = item.role
+            seen_ids.add(item.id)
+        else:
+            db.add(Party(document_id=document_id, name=item.name, role=item.role, confidence=1.0))
+
+    for party_id, party in existing.items():
+        if party_id not in seen_ids:
+            db.delete(party)
+
+    if payload.drafting_party_id is not None:
+        doc.drafting_party_id = payload.drafting_party_id
+        doc.status = DocumentStatus.PARTIES_CONFIRMED
+
+    db.commit()
+    return get_analysis(document_id, db)
