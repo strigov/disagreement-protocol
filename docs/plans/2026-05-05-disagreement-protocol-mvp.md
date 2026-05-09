@@ -59,10 +59,10 @@ phases:
     status: done
   - id: Ф18
     scope: "Export screen"
-    status: in-progress
+    status: done
   - id: Ф19
     scope: "Fixtures + end-to-end integration test"
-    status: pending
+    status: in-progress
 ---
 
 # Disagreement Protocol MVP Implementation Plan
