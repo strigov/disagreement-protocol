@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import uuid
+import re
+import urllib.parse
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
@@ -23,10 +25,71 @@ from app.processing.types import (
     Run,
 )
 from app.processing.validation_engine import ValidationEngine
-from app.schemas.protocol import ProtocolOut, ProtocolRowCreate, ProtocolRowOut, ProtocolRowPatch
+from app.schemas.protocol import ExportRequest, ProtocolOut, ProtocolRowCreate, ProtocolRowOut, ProtocolRowPatch
+from app.services.exporter import ProtocolExporter
 from app.services.protocol_generator import BuildContext, ProtocolRowBuilder, agreed_text_for_party
 
 router = APIRouter(prefix="/api", tags=["protocols"])
+
+_TRANSLIT = {
+    "а": "a",
+    "б": "b",
+    "в": "v",
+    "г": "g",
+    "д": "d",
+    "е": "e",
+    "ё": "yo",
+    "ж": "zh",
+    "з": "z",
+    "и": "i",
+    "й": "y",
+    "к": "k",
+    "л": "l",
+    "м": "m",
+    "н": "n",
+    "о": "o",
+    "п": "p",
+    "р": "r",
+    "с": "s",
+    "т": "t",
+    "у": "u",
+    "ф": "f",
+    "х": "h",
+    "ц": "ts",
+    "ч": "ch",
+    "ш": "sh",
+    "щ": "sch",
+    "ъ": "",
+    "ы": "y",
+    "ь": "",
+    "э": "e",
+    "ю": "yu",
+    "я": "ya",
+    " ": "_",
+}
+
+
+def _sanitize_filename(name: str) -> str:
+    sanitized = name.strip().replace("/", "").replace("\\", "")
+    sanitized = re.sub(r"[\x00-\x1f\x7f]", "", sanitized)
+    if len(sanitized) > 200:
+        sanitized = sanitized[:200]
+    return sanitized or "Протокол_разногласий"
+
+
+def _ascii_fallback(name: str) -> str:
+    out = []
+    for char in name:
+        lower = char.lower()
+        if lower in _TRANSLIT:
+            translit = _TRANSLIT[lower]
+            out.append(translit if char == lower else translit.capitalize())
+        elif char.isascii() and (char.isalnum() or char in "._-"):
+            out.append(char)
+        else:
+            out.append("_")
+    result = "".join(out).strip("_")
+    return result or "protocol"
 
 
 def _serialize_row(row: ProtocolRow) -> ProtocolRowOut:
@@ -237,6 +300,57 @@ def patch_row(
         row.flags = [*list(row.flags or []), "USER_EDITED"]
     db.commit()
     return _serialize_row(row)
+
+
+@router.post("/documents/{document_id}/protocol/export")
+def export_protocol(
+    document_id: uuid.UUID,
+    payload: ExportRequest,
+    db: Session = Depends(get_db),
+) -> Response:
+    doc = db.get(Document, document_id)
+    if doc is None:
+        raise HTTPException(404, "Document not found")
+
+    parties = db.query(Party).filter(Party.document_id == document_id).all()
+    drafting = next((party for party in parties if party.id == doc.drafting_party_id), None)
+    counterparty = next((party for party in parties if party.id != doc.drafting_party_id), None) if drafting else None
+    if drafting is None or counterparty is None:
+        raise HTTPException(409, "Parties not finalized")
+
+    protocol = db.query(Protocol).filter(Protocol.document_id == document_id).one_or_none()
+    if protocol is None:
+        raise HTTPException(409, "Protocol not built")
+
+    rows = (
+        db.query(ProtocolRow)
+        .filter(ProtocolRow.protocol_id == protocol.id)
+        .order_by(ProtocolRow.sort_order)
+        .all()
+    )
+    payload_rows = [
+        {
+            "point_label": row.point_label,
+            "party_1_text": row.party_1_text,
+            "party_2_text": row.party_2_text,
+            "agreed_text": row.agreed_text,
+        }
+        for row in rows
+    ]
+    data = ProtocolExporter().export(payload_rows, drafting.role, counterparty.role, doc.contract_name)
+    name = _sanitize_filename(payload.filename)
+    ascii_name = _ascii_fallback(name) + ".docx"
+    utf8_name = urllib.parse.quote(name + ".docx", safe="")
+    headers = {
+        "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}",
+    }
+    doc.status = DocumentStatus.EXPORTED
+    db.commit()
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=headers,
+    )
 
 
 @router.post("/protocols/{protocol_id}/rows", response_model=ProtocolRowOut, status_code=201)
