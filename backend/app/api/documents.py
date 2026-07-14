@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -13,14 +13,18 @@ from app.schemas.document import AnalysisOut, DocumentCreated, PreflightDiagnost
 from app.schemas.party import PartiesUpdateIn, PartyOut
 from app.schemas.validation import ValidationReportOut
 from app.services.ingestion import MAX_BYTES, IngestError, derive_contract_name, validate_upload
-from app.services.storage import S3Storage
-from app.workers.tasks import process_document
+from app.services.processing import process_document
+from app.services.storage import FileStorage
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
 @router.post("", response_model=DocumentCreated, status_code=201)
-def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)) -> DocumentCreated:
+def upload_document(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> DocumentCreated:
     filename = file.filename or ""
     if not filename.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="Поддерживаются только файлы .docx без макросов")
@@ -36,7 +40,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
 
     doc_id = uuid.uuid4()
     storage_key = f"documents/{doc_id}/input.docx"
-    S3Storage().put(storage_key, data)
+    FileStorage().put(storage_key, data)
     doc = Document(
         id=doc_id,
         original_filename=filename or "document.docx",
@@ -46,7 +50,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
     )
     db.add(doc)
     db.commit()
-    process_document.delay(str(doc_id))
+    background_tasks.add_task(process_document, str(doc_id))
     return DocumentCreated(id=doc_id, status=doc.status.value)
 
 

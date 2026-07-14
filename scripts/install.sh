@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-SKIP_DOCKER=0
 SKIP_BACKEND=0
 SKIP_FRONTEND=0
 
@@ -11,11 +10,10 @@ usage() {
   cat <<'USAGE'
 Usage: ./scripts/install.sh [options]
 
-Install local development dependencies and prepare the project.
+Install local development dependencies.
 
 Options:
-  --skip-docker     Do not start docker compose services.
-  --skip-backend    Do not install backend dependencies or run migrations.
+  --skip-backend    Do not install backend dependencies.
   --skip-frontend   Do not install frontend dependencies.
   -h, --help        Show this help.
 USAGE
@@ -34,9 +32,6 @@ need_command() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --skip-docker)
-      SKIP_DOCKER=1
-      ;;
     --skip-backend)
       SKIP_BACKEND=1
       ;;
@@ -56,12 +51,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ "$SKIP_DOCKER" -eq 0 ]]; then
-  need_command docker
-  log "Starting local infrastructure"
-  (cd "$ROOT_DIR" && docker compose up -d)
-fi
-
 if [[ "$SKIP_BACKEND" -eq 0 ]]; then
   need_command uv
   log "Installing backend dependencies with Python 3.12"
@@ -74,7 +63,6 @@ import sys
 if sys.version_info[:2] != (3, 12):
     raise SystemExit(f"Expected Python 3.12.x, got {sys.version.split()[0]}")
 PY
-    uv run alembic upgrade head
   )
 fi
 

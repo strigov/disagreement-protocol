@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.document import Document
-from app.services.storage import S3Storage
+from app.services.storage import FileStorage
 
 router = APIRouter(prefix="/api/files", tags=["files"])
 
@@ -18,7 +18,7 @@ def download_input(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Res
     if doc is None:
         raise HTTPException(404, "Document not found")
 
-    data = S3Storage().get(doc.storage_key)
+    data = FileStorage().get(doc.storage_key)
     return Response(
         content=data,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",

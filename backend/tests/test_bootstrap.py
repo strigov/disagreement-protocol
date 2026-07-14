@@ -1,4 +1,3 @@
-import configparser
 from pathlib import Path
 
 
@@ -7,14 +6,15 @@ def test_settings_use_defaults_and_environment_overrides(monkeypatch):
 
     get_settings.cache_clear()
     defaults = Settings()
-    assert defaults.database_url == "postgresql+psycopg://disprot:disprot@localhost:5432/disprot"
-    assert defaults.redis_url == "redis://localhost:6379/0"
-    assert defaults.s3_bucket == "disprot"
+    assert defaults.database_url == "sqlite:///./data/disprot.db"
+    assert defaults.storage_dir == "./data/files"
     assert defaults.app_env == "local"
 
-    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://user:pass@db:5432/test")
+    monkeypatch.setenv("DATABASE_URL", "sqlite:////tmp/other.db")
+    monkeypatch.setenv("STORAGE_DIR", "/tmp/other-files")
     overridden = Settings()
-    assert overridden.database_url == "postgresql+psycopg://user:pass@db:5432/test"
+    assert overridden.database_url == "sqlite:////tmp/other.db"
+    assert overridden.storage_dir == "/tmp/other-files"
 
 
 def test_models_register_expected_bootstrap_tables_and_columns():
@@ -55,7 +55,19 @@ def test_models_register_expected_bootstrap_tables_and_columns():
     assert "user_edited" in protocol_rows.c
 
 
-def test_local_dev_configuration_exposes_required_services():
+def test_schema_creates_on_sqlite_in_memory():
+    """The whole schema must be creatable on SQLite (the only supported engine)."""
+    from sqlalchemy import create_engine
+
+    import app.models  # noqa: F401
+    from app.db.base import Base
+
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    Base.metadata.drop_all(engine)
+
+
+def test_env_example_matches_local_stack():
     root = Path(__file__).resolve().parents[2]
 
     env_values = dict(
@@ -64,19 +76,7 @@ def test_local_dev_configuration_exposes_required_services():
         if line and not line.startswith("#")
     )
     assert env_values == {
-        "DATABASE_URL": "postgresql+psycopg://disprot:disprot@localhost:5432/disprot",
-        "REDIS_URL": "redis://localhost:6379/0",
-        "S3_ENDPOINT": "http://localhost:9000",
-        "S3_ACCESS_KEY": "disprot",
-        "S3_SECRET_KEY": "disprotsecret",
-        "S3_BUCKET": "disprot",
+        "DATABASE_URL": "sqlite:///./data/disprot.db",
+        "STORAGE_DIR": "./data/files",
         "APP_ENV": "local",
     }
-
-    alembic_ini = configparser.ConfigParser()
-    alembic_ini.read(root / "backend" / "alembic.ini")
-    assert alembic_ini["alembic"]["script_location"] == "alembic"
-    assert (
-        alembic_ini["alembic"]["sqlalchemy.url"]
-        == "postgresql+psycopg://disprot:disprot@localhost:5432/disprot"
-    )

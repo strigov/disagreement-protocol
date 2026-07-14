@@ -46,15 +46,14 @@ async def test_upload_rejects_oversized_file_without_side_effects(monkeypatch):
 
     class FakeStorage:
         def put(self, key, body):
-            calls.append(("s3.put", key, body))
+            calls.append(("storage.put", key, body))
 
-    class FakeTask:
-        def delay(self, document_id):
-            calls.append(("celery.delay", document_id))
+    def fake_process(document_id):
+        calls.append(("background.process", document_id))
 
     monkeypatch.setattr("app.api.documents.MAX_BYTES", 16, raising=False)
-    monkeypatch.setattr("app.api.documents.S3Storage", FakeStorage)
-    monkeypatch.setattr("app.api.documents.process_document", FakeTask())
+    monkeypatch.setattr("app.api.documents.FileStorage", FakeStorage)
+    monkeypatch.setattr("app.api.documents.process_document", fake_process)
     app.dependency_overrides[get_db] = override_get_db
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -95,12 +94,11 @@ async def test_upload_happy_path_creates_document(monkeypatch):
             captured["key"] = key
             captured["len"] = len(body)
 
-    class FakeTask:
-        def delay(self, document_id):
-            captured["task_doc_id"] = document_id
+    def fake_process(document_id):
+        captured["task_doc_id"] = document_id
 
-    monkeypatch.setattr("app.api.documents.S3Storage", FakeStorage)
-    monkeypatch.setattr("app.api.documents.process_document", FakeTask())
+    monkeypatch.setattr("app.api.documents.FileStorage", FakeStorage)
+    monkeypatch.setattr("app.api.documents.process_document", fake_process)
     app.dependency_overrides[get_db] = override_get_db
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:

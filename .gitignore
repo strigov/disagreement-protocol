@@ -26,6 +26,9 @@ env/
 *.swo
 *~
 
+# Local data (SQLite DB + uploaded files)
+backend/data/
+
 # Generated / temporary artifacts
 tmp/
 temp/
@@ -34,6 +37,7 @@ coverage/
 htmlcov/
 node_modules/
 .next/
+next-env.d.ts
 *.tsbuildinfo
 
 # Local research materials

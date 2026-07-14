@@ -9,20 +9,9 @@ dependencies = [
   "pydantic==2.9.2",
   "pydantic-settings==2.5.2",
   "sqlalchemy==2.0.35",
-  "alembic==1.13.3",
-  "psycopg[binary]==3.2.3",
-  "celery==5.4.0",
-  "redis==5.1.1",
-  "boto3==1.35.36",
   "python-multipart==0.0.12",
   "lxml==5.3.0",
   "python-docx==1.1.2",
-  "docx-revisions==0.1.5",
-  "docx2python==2.10.1",
-  "docxtpl==0.18.0",
-  "rapidfuzz==3.10.0",
-  "diff-match-patch==20230430",
-  "natasha==1.6.0",
 ]
 
 [project.optional-dependencies]

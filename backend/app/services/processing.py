@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.db.session import SessionLocal
 from app.models.clause import Clause as ClauseModel
@@ -9,13 +9,16 @@ from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.models.party import Party
 from app.services.ingestion import run_pipeline
-from app.services.storage import S3Storage
-from app.workers.celery_app import celery_app
+from app.services.storage import FileStorage
 
 
-@celery_app.task(name="app.workers.tasks.process_document")
 def process_document(document_id: str) -> None:
-    storage = S3Storage()
+    """Run the OOXML pipeline for an uploaded document.
+
+    Executed as a FastAPI background task after the upload response is sent;
+    opens its own DB session because the request session is already closed.
+    """
+    storage = FileStorage()
     db = SessionLocal()
     try:
         doc = db.get(Document, uuid.UUID(document_id))
@@ -75,7 +78,7 @@ def process_document(document_id: str) -> None:
         doc.preflight_metrics = result["preflight_metrics"]
         doc.metadata_json = {"preflight_diagnostics": result["preflight_diagnostics"]}
         doc.status = DocumentStatus.PARSED
-        doc.updated_at = datetime.utcnow()
+        doc.updated_at = datetime.now(UTC)
         db.commit()
     finally:
         db.close()

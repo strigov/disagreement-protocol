@@ -4,16 +4,16 @@
 
 Приложение состоит из:
 
-- `backend/` - FastAPI, Celery, PostgreSQL, Redis, MinIO/S3, OOXML-пайплайн и экспорт DOCX.
+- `backend/` - FastAPI + SQLite, OOXML-пайплайн и экспорт DOCX. Загруженные файлы и база лежат в `backend/data/`.
 - `frontend/` - Next.js UI для загрузки документа, проверки сторон, редактирования таблицы и экспорта.
-- `docker-compose.yml` - локальные сервисы: PostgreSQL, Redis, MinIO.
+
+Внешних сервисов нет: не нужны Docker, PostgreSQL, Redis и S3. Разбор документа выполняется фоновой задачей FastAPI в том же процессе.
 
 ## Требования
 
 - Python 3.12. Рекомендуется именно 3.12: тесты и зависимости проекта рассчитаны на эту ветку.
 - `uv` для Python-зависимостей.
 - Node.js 20+ и npm.
-- Docker Desktop или совместимый Docker Compose.
 
 Входной файл должен быть `.docx` без макросов, желательно с правками в режиме рецензирования. `.doc` не поддерживается. Максимальный размер загрузки - 25 MB.
 
@@ -28,60 +28,21 @@
 ./scripts/start.sh
 ```
 
-`install.sh` поднимает Docker-сервисы, ставит backend-зависимости на Python 3.12, применяет миграции и устанавливает frontend-зависимости. `start.sh` запускает FastAPI, Celery worker и Next.js в одном терминале.
+`install.sh` ставит backend-зависимости на Python 3.12 и frontend-зависимости. `start.sh` запускает FastAPI и Next.js в одном терминале.
 
-Откройте `http://localhost:3000`. Для остановки приложения нажмите `Ctrl+C` в терминале со `start.sh`. Docker-контейнеры при этом останутся запущенными; остановить их можно командой:
-
-```bash
-docker compose down
-```
-
-Полезные опции:
-
-```bash
-./scripts/install.sh --skip-frontend
-./scripts/install.sh --skip-docker
-./scripts/start.sh --skip-migrations
-./scripts/start.sh --skip-docker
-```
+Откройте `http://localhost:3000`. Для остановки нажмите `Ctrl+C` в терминале со `start.sh`.
 
 ### Вручную
 
-#### 1. Поднять инфраструктуру
-
-Из корня проекта:
-
-```bash
-docker compose up -d
-```
-
-Будут доступны:
-
-- PostgreSQL: `localhost:5432`
-- Redis: `localhost:6379`
-- MinIO S3 API: `localhost:9000`
-- MinIO Console: `http://localhost:9001`
-
-Локальные значения по умолчанию уже зашиты в backend и совпадают с `.env.example`. Если нужно переопределить настройки, запускайте backend из папки `backend/` и создайте там файл `.env`.
-
-#### 2. Установить backend и применить миграции
-
-В отдельном терминале:
+#### 1. Установить и запустить backend
 
 ```bash
 cd backend
 uv sync --python 3.12 --extra dev
-uv run alembic upgrade head
-```
-
-#### 3. Запустить FastAPI
-
-В отдельном терминале:
-
-```bash
-cd backend
 uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+
+Схема базы создаётся автоматически при старте. SQLite-файл и загруженные документы появятся в `backend/data/`.
 
 Проверка:
 
@@ -95,18 +56,7 @@ curl http://localhost:8000/health
 {"status":"ok"}
 ```
 
-#### 4. Запустить Celery worker
-
-В отдельном терминале:
-
-```bash
-cd backend
-uv run celery -A app.workers.celery_app:celery_app worker --loglevel=info --pool=solo
-```
-
-Worker нужен, чтобы после загрузки `.docx` документ реально разобрался: backend кладёт задачу в Redis, а Celery выполняет OOXML-пайплайн.
-
-#### 5. Запустить frontend
+#### 2. Запустить frontend
 
 В отдельном терминале:
 
@@ -119,6 +69,15 @@ npm run dev
 Откройте `http://localhost:3000`.
 
 Frontend обращается к `/api/*`; Next.js проксирует эти запросы на `http://localhost:8000/api/*`.
+
+### Настройки
+
+Локальные значения по умолчанию зашиты в backend и совпадают с `.env.example`. Переопределить можно через файл `backend/.env`:
+
+```bash
+DATABASE_URL=sqlite:///./data/disprot.db
+STORAGE_DIR=./data/files
+```
 
 ## Как пользоваться
 
@@ -178,7 +137,7 @@ npm run build
    - удаление текста;
    - добавление нового пункта;
    - удаление пункта целиком;
-   - правка в пункте с нумерацией `1.1`, `1.2` и т.п.
+   - правка в пункте с автоматической нумерацией `1.1`, `1.2` и т.п.
 4. Загрузите файл в UI.
 5. Проверьте, что статус доходит до предварительного отчёта, а не остаётся на анализе.
 6. Проверьте, что стороны извлечены или могут быть исправлены вручную.
@@ -213,20 +172,15 @@ curl -F "file=@/absolute/path/to/contract.docx" \
 curl http://localhost:8000/api/documents/<document-id>/analysis
 ```
 
-Если `status` стал `parsed`, Celery worker, PostgreSQL, Redis и MinIO работают вместе корректно.
+Если `status` стал `parsed`, пайплайн отработал корректно.
 
 ## Частые проблемы
 
 - `curl /health` не отвечает - проверьте, что `uvicorn` запущен на порту `8000`.
 - UI загружается, но API падает - проверьте backend и rewrite в `frontend/next.config.mjs`.
-- Документ висит на анализе - проверьте Celery worker и Redis.
-- Ошибка подключения к базе - проверьте `docker compose ps`, порт `5432` и миграции `uv run alembic upgrade head`.
-- Ошибка S3/MinIO - проверьте контейнер `minio`, порт `9000` и доступность `http://localhost:9001`.
-- После изменения моделей база ведёт себя странно - для локальной разработки можно пересоздать Docker volumes, но это удалит локальные данные:
+- Документ висит на анализе - смотрите лог `uvicorn`: пайплайн выполняется фоновой задачей в том же процессе, ошибка будет в логе, а статус документа станет `failed` с текстом ошибки в `/analysis`.
+- После изменения моделей база ведёт себя странно - удалите локальные данные и перезапустите backend (схема создастся заново, локальные данные будут потеряны):
 
 ```bash
-docker compose down -v
-docker compose up -d
-cd backend
-uv run alembic upgrade head
+rm -rf backend/data
 ```
