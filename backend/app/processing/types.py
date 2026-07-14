@@ -18,6 +18,8 @@ class ResolverDiagnostic:
     codes (extend as new diagnostics are added):
       - "UNKNOWN_NUMID"        — numId on a paragraph not present in numbering.xml
       - "LOW_CONFIDENCE"       — numbering.confidence < 0.85
+      - "NUMBERING_TEXT_MISMATCH" — computed number differs from the manual
+        number typed at the start of the paragraph text
       - "FORMAT_ONLY_MISMATCH" — revisions exist but original_text==accepted_text
       - "MAPPING_MISMATCH"     — generic resolver could not map a block
     """
@@ -97,7 +99,7 @@ class RevisionData:
 class NumberingData:
     rendered_number: str | None
     confidence: float
-    source: str  # "docx2python" | "regex" | "unmapped"
+    source: str  # "native" | "regex" | "unmapped"
 
 
 @dataclass(frozen=True)

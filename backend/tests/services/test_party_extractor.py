@@ -1,4 +1,4 @@
-from app.services.party_extractor import ExtractedParty, PartyExtractor
+from app.services.party_extractor import PartyExtractor
 
 
 def test_extracts_two_parties_with_role_labels():

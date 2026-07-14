@@ -1,3 +1,4 @@
+import zipfile
 from io import BytesIO
 
 from docx import Document as DocxDocument
@@ -86,6 +87,83 @@ def build_docx_with_deletion(
 def build_docx_with_manual_numbering(items: list[str]) -> bytes:
     """Items already include literal numbers like '1.', '1.1.', '2.'."""
     return build_simple_docx(items)
+
+
+DEFAULT_NUMBERING_XML = f"""<w:numbering xmlns:w="{W_NS}">
+  <w:abstractNum w:abstractNumId="0">
+    <w:lvl w:ilvl="0">
+      <w:start w:val="1"/>
+      <w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1."/>
+    </w:lvl>
+    <w:lvl w:ilvl="1">
+      <w:start w:val="1"/>
+      <w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1.%2."/>
+    </w:lvl>
+    <w:lvl w:ilvl="2">
+      <w:start w:val="1"/>
+      <w:numFmt w:val="decimal"/>
+      <w:lvlText w:val="%1.%2.%3."/>
+    </w:lvl>
+  </w:abstractNum>
+  <w:num w:numId="1">
+    <w:abstractNumId w:val="0"/>
+  </w:num>
+</w:numbering>"""
+
+
+def build_docx_with_native_numbering(
+    items: list[tuple[int | None, str]],
+    numbering_xml: str = DEFAULT_NUMBERING_XML,
+    styles_xml: str | None = None,
+    num_id: int = 1,
+    style_ids: list[str | None] | None = None,
+) -> bytes:
+    """Build a minimal DOCX package with real Word auto-numbering.
+
+    `items` is a list of (ilvl, text); ilvl=None yields an unnumbered
+    paragraph. `style_ids` (parallel to items) attaches w:pStyle without a
+    direct numPr — for testing style-based numbering.
+    """
+    paragraphs = []
+    for index, (ilvl, text) in enumerate(items):
+        ppr_parts = []
+        style_id = style_ids[index] if style_ids else None
+        if style_id:
+            ppr_parts.append(f'<w:pStyle w:val="{style_id}"/>')
+        if ilvl is not None:
+            ppr_parts.append(
+                f'<w:numPr><w:ilvl w:val="{ilvl}"/><w:numId w:val="{num_id}"/></w:numPr>'
+            )
+        ppr = f"<w:pPr>{''.join(ppr_parts)}</w:pPr>" if ppr_parts else ""
+        paragraphs.append(f'<w:p>{ppr}<w:r><w:t xml:space="preserve">{text}</w:t></w:r></w:p>')
+    document_xml = (
+        f'<w:document xmlns:w="{W_NS}"><w:body>{"".join(paragraphs)}</w:body></w:document>'
+    )
+
+    content_types = (
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        "</Types>"
+    )
+    rels = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+        "</Relationships>"
+    )
+
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("[Content_Types].xml", content_types)
+        z.writestr("_rels/.rels", rels)
+        z.writestr("word/document.xml", document_xml)
+        z.writestr("word/numbering.xml", numbering_xml)
+        if styles_xml is not None:
+            z.writestr("word/styles.xml", styles_xml)
+    return buf.getvalue()
 
 
 def build_docx_with_unknown_numid(text: str, num_id: int = 999) -> bytes:

@@ -55,7 +55,7 @@ class OOXMLParser:
                     yield from self._iter_block_children(content)
                 elif self._contains_block_children(child):
                     raise ValueError(
-                        f"w:sdt missing w:sdtContent but contains block-level content"
+                        "w:sdt missing w:sdtContent but contains block-level content"
                     )
             elif self._contains_block_children(child):
                 raise ValueError(

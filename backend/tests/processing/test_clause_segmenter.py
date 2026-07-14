@@ -1,6 +1,5 @@
 from app.processing.clause_segmenter import ClauseSegmenter
 from app.processing.types import (
-    Clause,
     EnrichedParagraph,
     RawTable,
     RawTableCell,
