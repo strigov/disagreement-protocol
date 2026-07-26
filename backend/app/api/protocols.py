@@ -92,6 +92,40 @@ def _ascii_fallback(name: str) -> str:
     return result or "protocol"
 
 
+def _restore_table_cell(table_block_id: str, row_index: int, cell_index: int, cell_data) -> RawTableCell:
+    if isinstance(cell_data, str):
+        original_text = cell_data
+        accepted_text = cell_data
+        revisions = ()
+    else:
+        original_text = cell_data.get("original_text")
+        accepted_text = cell_data.get("accepted_text")
+        revisions = tuple(
+            RevisionRecord(
+                type=revision.get("type", ""),
+                text=revision.get("text", ""),
+                author=revision.get("author", ""),
+            )
+            for revision in (cell_data.get("revisions") or [])
+        )
+    paragraph_text = accepted_text if accepted_text is not None else original_text or ""
+    return RawTableCell(
+        paragraphs=(
+            RawParagraph(
+                block_id=f"{table_block_id}_p_{row_index:04d}_{cell_index:04d}",
+                runs=(Run(text=paragraph_text),),
+                num_id=None,
+                ilvl=None,
+                style_id=None,
+                is_in_table=True,
+            ),
+        ),
+        original_text=original_text,
+        accepted_text=accepted_text,
+        revisions=revisions,
+    )
+
+
 def _serialize_row(row: ProtocolRow) -> ProtocolRowOut:
     return ProtocolRowOut(
         id=row.id,
@@ -153,27 +187,16 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
         )
         for table in cm.tables_json or []:
             rows_dc: list[RawTableRow] = []
-            for row_cells in table.get("rows", []):
+            for row_index, row_cells in enumerate(table.get("rows", [])):
                 cells = tuple(
-                    RawTableCell(
-                        paragraphs=(
-                            RawParagraph(
-                                block_id=f"{table['block_id']}_p_{index:04d}",
-                                runs=(Run(text=cell_text or ""),),
-                                num_id=None,
-                                ilvl=None,
-                                style_id=None,
-                                is_in_table=True,
-                            ),
-                        ),
-                    )
-                    for index, cell_text in enumerate(row_cells)
+                    _restore_table_cell(table["block_id"], row_index, cell_index, cell_data)
+                    for cell_index, cell_data in enumerate(row_cells)
                 )
                 rows_dc.append(RawTableRow(cells=cells))
             clause.tables.append(
                 RawTable(
                     block_id=table["block_id"],
-                    block_index=0,
+                    block_index=table.get("block_index", 0),
                     rows=tuple(rows_dc),
                     has_revisions=bool(table.get("has_revisions", False)),
                 ),

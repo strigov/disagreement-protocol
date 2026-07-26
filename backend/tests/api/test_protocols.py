@@ -169,6 +169,78 @@ def doc_with_changes() -> Iterator[tuple[Document, Party, Party]]:
         app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def doc_with_versioned_table_cells() -> Iterator[Document]:
+    doc = Document(
+        id=uuid.uuid4(),
+        original_filename="table.docx",
+        storage_key="table-key",
+        contract_name="Договор",
+        status=DocumentStatus.PARTIES_CONFIRMED,
+        preflight_metrics={
+            "revisions_total": 2,
+            "format_only_count": 0,
+            "paragraphs_with_numbering": 1,
+            "numbering_confidence_mean": 1.0,
+        },
+    )
+    p1 = Party(id=uuid.uuid4(), document_id=doc.id, name="ООО Ромашка", role="Арендодатель", confidence=0.9)
+    p2 = Party(id=uuid.uuid4(), document_id=doc.id, name="АО Василёк", role="Арендатор", confidence=0.9)
+    doc.drafting_party_id = p2.id
+    clause = ClauseModel(
+        id=uuid.uuid4(),
+        document_id=doc.id,
+        clause_key="c_p_0001",
+        label="1.",
+        level=0,
+        parent_key=None,
+        sort_order=0,
+        original_text="",
+        accepted_text="",
+        flags=[],
+        confidence=1.0,
+        revisions=[
+            {"type": "DEL", "text": "1 200", "author": "Юрист"},
+            {"type": "INS", "text": "1 100", "author": "Юрист"},
+        ],
+        tables_json=[
+            {
+                "block_id": "t_0001",
+                "has_revisions": True,
+                "rows": [
+                    [
+                        {
+                            "original_text": "2026 год",
+                            "accepted_text": "2026 год",
+                            "revisions": [],
+                        },
+                        {
+                            "original_text": "1 200",
+                            "accepted_text": "1 100",
+                            "revisions": [
+                                {"type": "DEL", "text": "1 200", "author": "Юрист"},
+                                {"type": "INS", "text": "1 100", "author": "Юрист"},
+                            ],
+                        },
+                        "192 500",
+                    ],
+                    ["legacy cell"],
+                ],
+            },
+        ],
+    )
+    db = FakeDb(doc, [p1, p2], [clause])
+
+    def dependency_override() -> Iterator[FakeDb]:
+        yield db
+
+    app.dependency_overrides[get_db] = dependency_override
+    try:
+        yield doc
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_build_protocol_creates_rows(doc_with_changes):
     doc, _, _ = doc_with_changes
     with TestClient(app) as client:
@@ -181,6 +253,18 @@ def test_build_protocol_creates_rows(doc_with_changes):
         assert row["party_1_text"] == "Старый"
         assert row["party_2_text"] == "Новый"
         assert row["agreed_text"] == "Редакция Арендатора"
+
+
+def test_build_protocol_round_trips_versioned_and_legacy_table_cells(doc_with_versioned_table_cells):
+    with TestClient(app) as client:
+        response = client.post(f"/api/documents/{doc_with_versioned_table_cells.id}/protocol")
+
+    assert response.status_code == 201, response.text
+    row = response.json()["rows"][0]
+    assert row["party_1_text"] == "2026 год | 1 200 | 192 500\nlegacy cell"
+    assert row["party_2_text"] == "2026 год | 1 100 | 192 500\nlegacy cell"
+    assert "1 2001 100" not in row["party_1_text"] + row["party_2_text"]
+    assert "TABLE_CELL_CHANGE" in row["flags"]
 
 
 def test_patch_row_marks_user_edited(doc_with_changes):

@@ -8,6 +8,7 @@ from lxml import etree
 from app.processing.types import (
     RawDocument,
     RawParagraph,
+    RawTable,
     ResolverDiagnostic,
     RevisionData,
     RevisionRecord,
@@ -19,7 +20,7 @@ RevisionResolveResult = tuple[dict[str, RevisionData], list[ResolverDiagnostic]]
 
 
 class RevisionResolver:
-    """Build original_text / accepted_text for each top-level paragraph."""
+    """Build original_text / accepted_text for document and table paragraphs."""
 
     def resolve(self, data: bytes, raw_doc: RawDocument) -> RevisionResolveResult:
         with zipfile.ZipFile(BytesIO(data)) as z:
@@ -31,34 +32,81 @@ class RevisionResolver:
         if body is None:
             return out, diags
 
-        para_blocks = [b for b in raw_doc.blocks if isinstance(b, RawParagraph)]
-        body_paragraphs = [
-            c
-            for c in self._iter_block_children(body)
-            if etree.QName(c.tag).localname == "p"
-        ]
-        for raw_p, p_elem in zip(para_blocks, body_paragraphs):
-            rd = self._paragraph_revision(p_elem)
-            out[raw_p.block_id] = rd
-            if rd.revisions and rd.original_text == rd.accepted_text:
-                diags.append(
-                    ResolverDiagnostic(
-                        level="warning",
-                        component="revision",
-                        code="FORMAT_ONLY_MISMATCH",
-                        message="Обнаружена форматная правка без изменения текста",
-                        block_id=raw_p.block_id,
+        body_blocks = list(self._iter_block_children(body))
+        xml_index = 0
+        for raw_block in raw_doc.blocks:
+            expected_tag = "p" if isinstance(raw_block, RawParagraph) else "tbl"
+            xml_block = body_blocks[xml_index] if xml_index < len(body_blocks) else None
+            if xml_block is not None and etree.QName(xml_block.tag).localname == expected_tag:
+                xml_index += 1
+                if isinstance(raw_block, RawParagraph):
+                    self._store_paragraph_revision(
+                        raw_block,
+                        self._paragraph_revision(xml_block),
+                        out,
+                        diags,
                     )
-                )
+                else:
+                    self._resolve_table(raw_block, xml_block, out, diags)
+                continue
 
-        for raw_p in para_blocks[len(body_paragraphs) :]:
-            text = raw_p.text()
-            out[raw_p.block_id] = RevisionData(
-                original_text=text,
-                accepted_text=text,
-                revisions=(),
-            )
+            if isinstance(raw_block, RawParagraph):
+                self._store_paragraph_revision(raw_block, self._plain_revision(raw_block), out, diags)
+            else:
+                self._resolve_table(raw_block, None, out, diags)
         return out, diags
+
+    def _plain_revision(self, raw_p: RawParagraph) -> RevisionData:
+        text = raw_p.text()
+        return RevisionData(original_text=text, accepted_text=text, revisions=())
+
+    def _store_paragraph_revision(
+        self,
+        raw_p: RawParagraph,
+        revision_data: RevisionData,
+        out: dict[str, RevisionData],
+        diags: list[ResolverDiagnostic],
+    ) -> None:
+        out[raw_p.block_id] = revision_data
+        if revision_data.revisions and revision_data.original_text == revision_data.accepted_text:
+            diags.append(
+                ResolverDiagnostic(
+                    level="warning",
+                    component="revision",
+                    code="FORMAT_ONLY_MISMATCH",
+                    message="Обнаружена форматная правка без изменения текста",
+                    block_id=raw_p.block_id,
+                )
+            )
+
+    def _resolve_table(
+        self,
+        raw_table: RawTable,
+        tbl_elem,
+        out: dict[str, RevisionData],
+        diags: list[ResolverDiagnostic],
+    ) -> None:
+        xml_rows = tbl_elem.findall(f"{{{W_NS}}}tr") if tbl_elem is not None else []
+        for row_index, raw_row in enumerate(raw_table.rows):
+            xml_row = xml_rows[row_index] if row_index < len(xml_rows) else None
+            xml_cells = (
+                xml_row.findall(f"{{{W_NS}}}tc") if xml_row is not None else []
+            )
+            for cell_index, raw_cell in enumerate(raw_row.cells):
+                xml_cell = xml_cells[cell_index] if cell_index < len(xml_cells) else None
+                xml_paragraphs = []
+                if xml_cell is not None:
+                    xml_paragraphs = [
+                        block
+                        for block in self._iter_block_children(xml_cell)
+                        if etree.QName(block.tag).localname == "p"
+                    ]
+                for paragraph_index, raw_p in enumerate(raw_cell.paragraphs):
+                    if paragraph_index < len(xml_paragraphs):
+                        revision_data = self._paragraph_revision(xml_paragraphs[paragraph_index])
+                    else:
+                        revision_data = self._plain_revision(raw_p)
+                    self._store_paragraph_revision(raw_p, revision_data, out, diags)
 
     def _iter_block_children(self, elem):
         for child in elem:

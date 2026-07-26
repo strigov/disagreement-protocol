@@ -2,13 +2,14 @@ import sys
 
 from app.processing.ooxml_parser import OOXMLParser
 from app.processing.revision_resolver import RevisionResolver
-from app.processing.types import RawParagraph
+from app.processing.types import RawParagraph, RawTable
 from tests.fixtures.builders import (
     build_docx_with_deletion,
     build_docx_with_empty_format_only_run,
     build_docx_with_format_only_revisions,
     build_docx_with_many_run_format_only_revisions,
     build_docx_with_insertion,
+    build_docx_with_table_cell_replacement,
     build_simple_docx,
 )
 
@@ -110,3 +111,35 @@ def test_resolve_many_run_format_changes_extracts_text_once():
     revision_data = rmap[paragraph.block_id]
     assert len(revision_data.revisions) == change_count
     assert run_text_calls == 1
+
+
+def test_resolve_table_cell_replacement_keeps_original_and_accepted_versions():
+    data = build_docx_with_table_cell_replacement()
+    raw = OOXMLParser().parse(data)
+    table = next(block for block in raw.blocks if isinstance(block, RawTable))
+    target_cell = table.rows[1].cells[1]
+    target_paragraph = target_cell.paragraphs[0]
+
+    revision_map, diagnostics = RevisionResolver().resolve(data, raw)
+
+    revision_data = revision_map[target_paragraph.block_id]
+    assert revision_data.original_text == "1 200"
+    assert revision_data.accepted_text == "1 100"
+    assert [(revision.type, revision.text) for revision in revision_data.revisions] == [
+        ("DEL", "1 200"),
+        ("INS", "1 100"),
+    ]
+    assert diagnostics == []
+
+    unchanged_cells = [
+        table.rows[0].cells[0],
+        table.rows[0].cells[1],
+        table.rows[0].cells[2],
+        table.rows[1].cells[0],
+        table.rows[1].cells[2],
+    ]
+    assert all(
+        revision_map[cell.paragraphs[0].block_id].original_text
+        == revision_map[cell.paragraphs[0].block_id].accepted_text
+        for cell in unchanged_cells
+    )

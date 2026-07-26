@@ -57,8 +57,16 @@ class RawParagraph:
 @dataclass(frozen=True)
 class RawTableCell:
     paragraphs: tuple["RawParagraph", ...]
+    original_text: str | None = None
+    accepted_text: str | None = None
+    revisions: tuple["RevisionRecord", ...] = ()
 
-    def text(self) -> str:
+    def text(self, version: Literal["original", "accepted"] = "accepted") -> str:
+        if version not in ("original", "accepted"):
+            raise ValueError(f"Неизвестная версия ячейки: {version}")
+        resolved_text = self.original_text if version == "original" else self.accepted_text
+        if resolved_text is not None:
+            return resolved_text
         return " ".join(p.text() for p in self.paragraphs).strip()
 
 
@@ -74,9 +82,14 @@ class RawTable:
     rows: tuple[RawTableRow, ...]
     has_revisions: bool
 
-    def cell_text(self) -> str:
+    def cell_text(self, version: Literal["original", "accepted"] = "accepted") -> str:
         """Flattened text of all cells: joined by ' | ' across cells, '\n' across rows."""
-        return "\n".join(" | ".join(c.text() for c in r.cells) for r in self.rows)
+        if version not in ("original", "accepted"):
+            raise ValueError(f"Неизвестная версия таблицы: {version}")
+        return "\n".join(
+            " | ".join(c.text(version) for c in r.cells)
+            for r in self.rows
+        )
 
 
 @dataclass(frozen=True)

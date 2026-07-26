@@ -13,6 +13,7 @@ from tests.fixtures.builders import (
     build_multipar_contract,
     build_new_clause_contract,
     build_simple_contract_with_revision,
+    build_docx_with_table_cell_replacement,
 )
 
 
@@ -90,3 +91,36 @@ def test_format_only_revision_counts_without_creating_changed_clause():
     changed_clause_keys = {clause.clause_key for clause in result["changed_clauses"]}
     assert format_only_clause_keys
     assert format_only_clause_keys.isdisjoint(changed_clause_keys)
+
+
+def test_table_cell_replacement_survives_pipeline_row_and_export():
+    result = run_pipeline(build_docx_with_table_cell_replacement())
+    rows = ProtocolRowBuilder().build(
+        result["changed_clauses"],
+        BuildContext(drafting_party_role="Арендатор", counterparty_role="Арендодатель"),
+    )
+
+    table_rows = [row for row in rows if "2026 год" in row.party_1_text]
+    assert len(table_rows) == 1
+    row = table_rows[0]
+    assert "2026 год | 1 200 | 192 500" in row.party_1_text
+    assert "2026 год | 1 100 | 192 500" in row.party_2_text
+    assert "1 2001 100" not in row.party_1_text + row.party_2_text
+    assert "TABLE_CELL_CHANGE" in row.flags
+    assert result["preflight_metrics"]["revisions_total"] == 2
+
+    exported = ProtocolExporter().export(
+        [
+            {
+                "point_label": row.point_label,
+                "party_1_text": row.party_1_text,
+                "party_2_text": row.party_2_text,
+                "agreed_text": row.agreed_text,
+            },
+        ],
+        "Арендатор",
+        "Арендодатель",
+        "Договор",
+    )
+    exported_doc = Document(BytesIO(exported))
+    assert len(exported_doc.tables) == 1

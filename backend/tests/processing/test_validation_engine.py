@@ -1,4 +1,12 @@
-from app.processing.types import EnrichedParagraph, Clause, RevisionRecord, ResolverDiagnostic
+from app.processing.types import (
+    Clause,
+    EnrichedParagraph,
+    RawTable,
+    RawTableCell,
+    RawTableRow,
+    RevisionRecord,
+    ResolverDiagnostic,
+)
 from app.processing.validation_engine import ValidationEngine
 from app.services.protocol_generator import BuiltRow
 
@@ -164,3 +172,36 @@ def test_table_cell_change_emits_row_level_warning():
     assert table_warnings[0]["scope"] == "row"
     assert table_warnings[0]["row_id"] == "row_abc"
     assert "Таблица в пункте 3." in table_warnings[0]["message"]
+
+
+def test_counts_revisions_in_table_cells():
+    clause = _clause(_ep([]))
+    clause.tables.append(
+        RawTable(
+            block_id="t_0001",
+            block_index=1,
+            rows=(
+                RawTableRow(
+                    cells=(
+                        RawTableCell(
+                            paragraphs=(),
+                            original_text="1 200",
+                            accepted_text="1 100",
+                            revisions=(
+                                RevisionRecord(type="DEL", text="1 200"),
+                                RevisionRecord(type="INS", text="1 100"),
+                                RevisionRecord(type="FORMAT_ONLY", text="1 100"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+            has_revisions=True,
+        ),
+    )
+
+    report = ValidationEngine().validate([_row()], [clause], [])
+
+    assert report.textual_revisions_total == 2
+    assert report.format_only_revisions == 1
+    assert report.covered_revisions == 2

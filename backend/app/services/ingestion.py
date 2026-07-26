@@ -10,7 +10,13 @@ from app.processing.clause_segmenter import ClauseSegmenter
 from app.processing.numbering_resolver import NumberingResolver
 from app.processing.ooxml_parser import OOXMLParser
 from app.processing.revision_resolver import RevisionResolver
-from app.processing.types import EnrichedParagraph, RawParagraph, RawTable
+from app.processing.types import (
+    EnrichedParagraph,
+    RawParagraph,
+    RawTable,
+    RawTableCell,
+    RawTableRow,
+)
 from app.services.party_extractor import PartyExtractor
 
 MAX_BYTES = 25 * 1024 * 1024
@@ -49,6 +55,50 @@ def derive_contract_name(filename: str) -> str | None:
     return name or None
 
 
+def _resolve_table(table: RawTable, revision_map: dict) -> RawTable:
+    rows: list[RawTableRow] = []
+    for row in table.rows:
+        cells: list[RawTableCell] = []
+        for cell in row.cells:
+            original_parts: list[str] = []
+            accepted_parts: list[str] = []
+            revisions = []
+            for paragraph in cell.paragraphs:
+                revision_data = revision_map.get(paragraph.block_id)
+                if revision_data is None:
+                    original_parts.append(paragraph.text())
+                    accepted_parts.append(paragraph.text())
+                    continue
+                original_parts.append(revision_data.original_text)
+                accepted_parts.append(revision_data.accepted_text)
+                revisions.extend(revision_data.revisions)
+            cells.append(
+                RawTableCell(
+                    paragraphs=cell.paragraphs,
+                    original_text=" ".join(original_parts).strip(),
+                    accepted_text=" ".join(accepted_parts).strip(),
+                    revisions=tuple(revisions),
+                ),
+            )
+        rows.append(RawTableRow(cells=tuple(cells)))
+    return RawTable(
+        block_id=table.block_id,
+        block_index=table.block_index,
+        rows=tuple(rows),
+        has_revisions=table.has_revisions,
+    )
+
+
+def _iter_clause_revisions(clauses):
+    for clause in clauses:
+        for paragraph in clause.paragraphs:
+            yield from paragraph.revisions
+        for table in clause.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    yield from cell.revisions
+
+
 def run_pipeline(data: bytes) -> dict[str, Any]:
     parser = OOXMLParser()
     raw = parser.parse(data)
@@ -73,7 +123,7 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
             )
             segmenter_blocks.append(enriched)
         elif isinstance(block, RawTable):
-            segmenter_blocks.append(block)
+            segmenter_blocks.append(_resolve_table(block, revisions))
 
     clauses = ClauseSegmenter().segment(segmenter_blocks)
     changed = ChangedClauseDetector().detect(clauses)
@@ -86,6 +136,7 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
         preamble_text = "\n".join(paragraph.accepted_text for paragraph in clauses[0].paragraphs)
 
     parties = PartyExtractor().extract(preamble_text)
+    all_revisions = list(_iter_clause_revisions(clauses))
     diagnostics = [
         {
             "level": diagnostic.level,
@@ -103,19 +154,9 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
         "parties": parties,
         "preflight_metrics": {
             "revisions_total": sum(
-                1
-                for clause in clauses
-                for paragraph in clause.paragraphs
-                for revision in paragraph.revisions
-                if revision.type in ("INS", "DEL")
+                1 for revision in all_revisions if revision.type in ("INS", "DEL")
             ),
-            "format_only_count": sum(
-                1
-                for clause in clauses
-                for paragraph in clause.paragraphs
-                for revision in paragraph.revisions
-                if revision.type == "FORMAT_ONLY"
-            ),
+            "format_only_count": sum(1 for revision in all_revisions if revision.type == "FORMAT_ONLY"),
             "paragraphs_with_numbering": sum(
                 1
                 for clause in clauses

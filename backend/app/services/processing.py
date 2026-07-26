@@ -58,7 +58,24 @@ def process_document(document_id: str) -> None:
                         {
                             "block_id": table.block_id,
                             "has_revisions": table.has_revisions,
-                            "rows": [[cell.text() for cell in row.cells] for row in table.rows],
+                            "rows": [
+                                [
+                                    {
+                                        "original_text": cell.text("original"),
+                                        "accepted_text": cell.text("accepted"),
+                                        "revisions": [
+                                            {
+                                                "type": revision.type,
+                                                "text": revision.text,
+                                                "author": revision.author,
+                                            }
+                                            for revision in cell.revisions
+                                        ],
+                                    }
+                                    for cell in row.cells
+                                ]
+                                for row in table.rows
+                            ],
                         }
                         for table in clause.tables
                     ],

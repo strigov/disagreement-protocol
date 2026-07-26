@@ -9,10 +9,11 @@ phases:
     commits: "c6d4ea6.."
   - id: Ф2
     scope: "Исходная и принятая редакции таблиц сквозь весь round-trip"
-    status: in-progress
+    status: done
+    commits: "4e5da52.."
   - id: Ф3
     scope: "Нумерация исходного договора и достоверная confidence-метрика"
-    status: pending
+    status: in-progress
   - id: Ф4
     scope: "Backend: стороны, падежи и причина ошибки анализа"
     status: pending

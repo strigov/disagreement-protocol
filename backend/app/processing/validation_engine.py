@@ -65,6 +65,14 @@ class ValidationEngine:
                         format_only += 1
                 if paragraph.numbering_confidence is not None:
                     confidences.append(paragraph.numbering_confidence)
+            for table in clause.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for revision in cell.revisions:
+                            if revision.type in ("INS", "DEL"):
+                                textual += 1
+                            elif revision.type == "FORMAT_ONLY":
+                                format_only += 1
 
             if "MULTI_PARAGRAPH" in clause.flags:
                 warnings.append(

@@ -59,6 +59,43 @@ def build_docx_with_table(rows: list[list[str]], leading_paragraph: str = "") ->
     return buf.getvalue()
 
 
+def build_docx_with_table_cell_replacement() -> bytes:
+    """Build a table with one replacement and unchanged neighbouring cells."""
+    doc = DocxDocument()
+    doc.add_paragraph("Преамбула договора")
+    doc.add_paragraph("1. Условия договора")
+    table = doc.add_table(rows=2, cols=3)
+    table.cell(0, 0).text = "Период"
+    table.cell(0, 1).text = "Сумма"
+    table.cell(0, 2).text = "Итого"
+    table.cell(1, 0).text = "2026 год"
+    table.cell(1, 2).text = "192 500"
+
+    replacement_paragraph = table.cell(1, 1).paragraphs[0]
+    replacement_paragraph.text = ""
+    deletion = etree.SubElement(replacement_paragraph._p, qn("w:del"))
+    deletion.set(qn("w:id"), "1")
+    deletion.set(qn("w:author"), "Юрист контрагента")
+    deletion.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    deleted_run = etree.SubElement(deletion, qn("w:r"))
+    deleted_text = etree.SubElement(deleted_run, qn("w:delText"))
+    deleted_text.text = "1 200"
+    deleted_text.set(qn("xml:space"), "preserve")
+
+    insertion = etree.SubElement(replacement_paragraph._p, qn("w:ins"))
+    insertion.set(qn("w:id"), "2")
+    insertion.set(qn("w:author"), "Юрист контрагента")
+    insertion.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    inserted_run = etree.SubElement(insertion, qn("w:r"))
+    inserted_text = etree.SubElement(inserted_run, qn("w:t"))
+    inserted_text.text = "1 100"
+    inserted_text.set(qn("xml:space"), "preserve")
+
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
 def build_docx_with_non_element_nodes() -> bytes:
     """Build a DOCX with XML comments and processing instructions in content."""
     doc = DocxDocument()

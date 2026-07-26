@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Literal
 
 from app.processing.types import Clause
 
@@ -63,10 +64,12 @@ class ProtocolRowBuilder:
             if clause.tables:
                 if any(table.has_revisions for table in clause.tables):
                     flags.add("TABLE_CELL_CHANGE")
-                table_text = self._render_tables(clause)
-                if table_text:
-                    original = f"{original}\n{table_text}" if original else table_text
-                    accepted = f"{accepted}\n{table_text}" if accepted else table_text
+                original_table_text = self._render_tables(clause, "original")
+                accepted_table_text = self._render_tables(clause, "accepted")
+                if original_table_text:
+                    original = f"{original}\n{original_table_text}" if original else original_table_text
+                if accepted_table_text:
+                    accepted = f"{accepted}\n{accepted_table_text}" if accepted else accepted_table_text
 
             if "NEW_CLAUSE" in clause.flags:
                 new_clause_counter += 1
@@ -112,26 +115,27 @@ class ProtocolRowBuilder:
         return rows
 
     def _standalone_table_row(self, clause: Clause, agreed: str) -> BuiltRow:
-        table_text = self._render_tables(clause)
+        original_table_text = self._render_tables(clause, "original")
+        accepted_table_text = self._render_tables(clause, "accepted")
         flags = {*clause.flags, "manual_review"}
         if any(table.has_revisions for table in clause.tables):
             flags.add("TABLE_CELL_CHANGE")
 
         return BuiltRow(
             point_label="Таблица",
-            party_1_text=table_text,
-            party_2_text=table_text,
+            party_1_text=original_table_text,
+            party_2_text=accepted_table_text,
             agreed_text=agreed,
             source_clause_key=clause.clause_key,
             confidence=0.5,
             flags=sorted(flags),
         )
 
-    def _render_tables(self, clause: Clause) -> str:
+    def _render_tables(self, clause: Clause, version: Literal["original", "accepted"]) -> str:
         parts: list[str] = []
         for table in clause.tables:
             for row in table.rows:
-                parts.append(" | ".join(cell.text() for cell in row.cells))
+                parts.append(" | ".join(cell.text(version) for cell in row.cells))
         return "\n".join(parts)
 
     def _confidence(self, clause: Clause) -> float:
