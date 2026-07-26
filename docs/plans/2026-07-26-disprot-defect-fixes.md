@@ -17,11 +17,11 @@ phases:
     commits: "0d2d989.."
   - id: Ф4
     scope: "Backend: стороны, падежи и причина ошибки анализа"
-    status: pending
+    status: in-progress
     parallel_group: G1
   - id: Ф5
     scope: "Frontend: терминальные статусы и понятные ошибки API"
-    status: pending
+    status: in-progress
     parallel_group: G1
 ---
 
