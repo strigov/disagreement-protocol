@@ -14,6 +14,7 @@ from tests.fixtures.builders import (
     build_new_clause_contract,
     build_simple_contract_with_revision,
     build_docx_with_table_cell_replacement,
+    build_docx_with_native_numbering,
 )
 
 
@@ -124,3 +125,48 @@ def test_table_cell_replacement_survives_pipeline_row_and_export():
     )
     exported_doc = Document(BytesIO(exported))
     assert len(exported_doc.tables) == 1
+
+
+def test_inserted_native_clause_keeps_original_numbers_and_new_clause_semantics():
+    data = build_docx_with_native_numbering(
+        [(0, "Раздел"), (1, "Исходный подпункт"), (1, "Вставленный подпункт"), (1, "Следующий подпункт")],
+        content_revisions=[None, None, "INS", None],
+        paragraph_mark_revisions=[None, None, "INS", None],
+    )
+
+    result = run_pipeline(data)
+    rows = ProtocolRowBuilder().build(
+        result["changed_clauses"],
+        BuildContext(drafting_party_role="Сторона2", counterparty_role="Сторона1"),
+    )
+
+    assert [paragraph.rendered_number for clause in result["clauses"] for paragraph in clause.paragraphs] == [
+        "1.",
+        "1.1.",
+        None,
+        "1.2.",
+    ]
+    new_rows = [row for row in rows if row.point_label.startswith("Новый пункт")]
+    assert len(new_rows) == 1
+    assert new_rows[0].party_1_text == "—"
+    assert new_rows[0].party_2_text == "Вставленный подпункт"
+    assert [row.point_label for row in rows if "NEW_CLAUSE" not in row.flags] == []
+
+
+def test_deleted_native_clause_keeps_original_number():
+    data = build_docx_with_native_numbering(
+        [(0, "Первый пункт"), (0, "Удалённый пункт"), (0, "Следующий пункт")],
+        content_revisions=[None, "DEL", None],
+        paragraph_mark_revisions=[None, "DEL", None],
+    )
+
+    result = run_pipeline(data)
+    rows = ProtocolRowBuilder().build(
+        result["changed_clauses"],
+        BuildContext(drafting_party_role="Сторона2", counterparty_role="Сторона1"),
+    )
+
+    deleted_rows = [row for row in rows if "DELETED_CLAUSE" in row.flags]
+    assert len(deleted_rows) == 1
+    assert deleted_rows[0].point_label == "2."
+    assert deleted_rows[0].party_2_text == "Исключить пункт 2."

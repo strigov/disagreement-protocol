@@ -17,7 +17,7 @@ class ResolverDiagnostic:
     surfaced to the user as a REVISION_MAPPING_MISMATCH warning. Defined
     codes (extend as new diagnostics are added):
       - "UNKNOWN_NUMID"        — numId on a paragraph not present in numbering.xml
-      - "LOW_CONFIDENCE"       — numbering.confidence < 0.85
+      - "LOW_CONFIDENCE"       — native numbering.confidence < 0.85
       - "NUMBERING_TEXT_MISMATCH" — computed number differs from the manual
         number typed at the start of the paragraph text
       - "FORMAT_ONLY_MISMATCH" — format-only revisions exist and
@@ -109,6 +109,12 @@ class RevisionData:
     original_text: str
     accepted_text: str
     revisions: tuple[RevisionRecord, ...]
+    exists_in_original: bool = True
+    original_style_id: str | None = None
+    original_num_id: int | None = None
+    original_ilvl: int | None = None
+    original_numpr_present: bool = False
+    original_ppr_change: bool = False
 
 
 @dataclass(frozen=True)
@@ -116,6 +122,7 @@ class NumberingData:
     rendered_number: str | None
     confidence: float
     source: str  # "native" | "regex" | "unmapped"
+    numbering_level: int | None = None
 
 
 @dataclass(frozen=True)
@@ -129,6 +136,7 @@ class EnrichedParagraph:
     revisions: tuple[RevisionRecord, ...]
     rendered_number: str | None
     numbering_confidence: float
+    numbering_level: int | None = None
 
 
 @dataclass

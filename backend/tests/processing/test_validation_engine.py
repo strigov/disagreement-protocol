@@ -1,3 +1,5 @@
+import pytest
+
 from app.processing.types import (
     Clause,
     EnrichedParagraph,
@@ -205,3 +207,21 @@ def test_counts_revisions_in_table_cells():
     assert report.textual_revisions_total == 2
     assert report.format_only_revisions == 1
     assert report.covered_revisions == 2
+
+
+def test_validation_mean_uses_all_restored_paragraph_confidences():
+    clause = Clause(
+        clause_key="c_p_0001",
+        label="Приложение № 1",
+        level=0,
+        parent_key=None,
+    )
+    clause.paragraphs.extend([
+        _ep([], num_conf=0.9),
+        _ep([], num_conf=0.5),
+        _ep([], num_conf=0.7),
+    ])
+
+    report = ValidationEngine().validate([_row()], [clause], [])
+
+    assert report.numbering_confidence_mean == pytest.approx(0.7)

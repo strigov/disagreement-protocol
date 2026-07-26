@@ -193,6 +193,61 @@ class RevisionResolver:
         original_text = "".join(original_parts)
         accepted_text = "".join(accepted_parts)
 
+        if original_text.strip() == "":
+            if accepted_text.strip() != "":
+                exists_in_original = False
+            else:
+                ppr = p_elem.find(f"{{{W_NS}}}pPr")
+                rpr = ppr.find(f"{{{W_NS}}}rPr") if ppr is not None else None
+                has_inserted_mark = rpr is not None and rpr.find(f"{{{W_NS}}}ins") is not None
+                has_deleted_mark = rpr is not None and rpr.find(f"{{{W_NS}}}del") is not None
+                exists_in_original = not has_inserted_mark or has_deleted_mark
+        else:
+            exists_in_original = True
+
+        original_style_id = None
+        original_num_id = None
+        original_ilvl = None
+        original_numpr_present = False
+        ppr = p_elem.find(f"{{{W_NS}}}pPr")
+        ppr_change = ppr.find(f"{{{W_NS}}}pPrChange") if ppr is not None else None
+        original_ppr = (
+            ppr_change.find(f"{{{W_NS}}}pPr")
+            if ppr_change is not None
+            else None
+        )
+        original_ppr_change = ppr_change is not None
+        if original_ppr is not None:
+            original_style = original_ppr.find(f"{{{W_NS}}}pStyle")
+            if original_style is not None:
+                original_style_id = original_style.get(f"{{{W_NS}}}val")
+            original_numpr = original_ppr.find(f"{{{W_NS}}}numPr")
+            if original_numpr is not None:
+                original_numpr_present = True
+                original_num_id_element = original_numpr.find(f"{{{W_NS}}}numId")
+                if (
+                    original_num_id_element is not None
+                    and original_num_id_element.get(f"{{{W_NS}}}val") is not None
+                ):
+                    try:
+                        original_num_id = int(
+                            original_num_id_element.get(f"{{{W_NS}}}val")
+                        )
+                    except (TypeError, ValueError):
+                        original_num_id = None
+                original_ilvl = 0
+                original_ilvl_element = original_numpr.find(f"{{{W_NS}}}ilvl")
+                if (
+                    original_ilvl_element is not None
+                    and original_ilvl_element.get(f"{{{W_NS}}}val") is not None
+                ):
+                    try:
+                        original_ilvl = int(
+                            original_ilvl_element.get(f"{{{W_NS}}}val")
+                        )
+                    except (TypeError, ValueError):
+                        original_ilvl = None
+
         def run_text(run_elem) -> str:
             parts: list[str] = []
             for node in run_elem.iter():
@@ -245,4 +300,10 @@ class RevisionResolver:
             original_text=original_text,
             accepted_text=accepted_text,
             revisions=tuple(revisions),
+            exists_in_original=exists_in_original,
+            original_style_id=original_style_id,
+            original_num_id=original_num_id,
+            original_ilvl=original_ilvl,
+            original_numpr_present=original_numpr_present,
+            original_ppr_change=original_ppr_change,
         )

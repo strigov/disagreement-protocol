@@ -8,7 +8,11 @@ from io import BytesIO
 from lxml import etree
 
 from app.processing.types import (
-    NumberingData, RawDocument, RawParagraph, ResolverDiagnostic,
+    NumberingData,
+    RawDocument,
+    RawParagraph,
+    ResolverDiagnostic,
+    RevisionData,
 )
 
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -16,6 +20,15 @@ REGEX_NUMBER = re.compile(r"^\s*(?:Статья\s+)?(\d+(?:\.\d+)*\.?)\s+", re.I
 LOW_CONFIDENCE_THRESHOLD = 0.85
 _PLACEHOLDER = re.compile(r"%(\d)")
 _MAX_STYLE_CHAIN = 10
+_MAX_WORD_LEVEL = 8
+_MAX_NUMBERING_START = 100_000
+_MAX_DERIVED_COUNTER = _MAX_NUMBERING_START
+_MAX_RENDERED_NUMBER_CHARS = 4_096
+_MAX_DOCUMENT_RENDERED_CHARS = 1_000_000
+_MAX_DIAGNOSTIC_NUMBER_CHARS = 256
+_MAX_LVL_TEXT_SOURCE_CHARS = 65_536
+_MAX_NUMBERING_XML_BYTES = 5_000_000
+_MAX_STYLES_XML_BYTES = 5_000_000
 
 _ROMAN = (
     (1000, "m"), (900, "cm"), (500, "d"), (400, "cd"), (100, "c"), (90, "xc"),
@@ -29,6 +42,14 @@ NumberingResolveResult = tuple[dict[str, NumberingData], list[ResolverDiagnostic
 
 def _w(tag: str) -> str:
     return f"{{{W_NS}}}{tag}"
+
+
+def _bounded_int(raw: str | int | None, lower: int, upper: int) -> int | None:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if lower <= value <= upper else None
 
 
 def _format_value(value: int, num_fmt: str) -> str:
@@ -85,11 +106,15 @@ class _NumberingModel:
             with zipfile.ZipFile(BytesIO(data)) as z:
                 names = set(z.namelist())
                 if "word/numbering.xml" in names:
-                    with z.open("word/numbering.xml") as f:
-                        model._load_numbering(etree.parse(f).getroot())
+                    info = z.getinfo("word/numbering.xml")
+                    if info.file_size <= _MAX_NUMBERING_XML_BYTES:
+                        with z.open(info) as f:
+                            model._load_numbering(etree.parse(f).getroot())
                 if "word/styles.xml" in names:
-                    with z.open("word/styles.xml") as f:
-                        model._load_styles(etree.parse(f).getroot())
+                    info = z.getinfo("word/styles.xml")
+                    if info.file_size <= _MAX_STYLES_XML_BYTES:
+                        with z.open(info) as f:
+                            model._load_styles(etree.parse(f).getroot())
         except Exception:
             return cls()
         return model
@@ -120,10 +145,18 @@ class _NumberingModel:
                 raw_ilvl = override.get(_w("ilvl"))
                 if raw_ilvl is None:
                     continue
-                ilvl = int(raw_ilvl)
+                ilvl = _bounded_int(raw_ilvl, 0, _MAX_WORD_LEVEL)
+                if ilvl is None:
+                    continue
                 start_override = override.find(_w("startOverride"))
                 if start_override is not None and start_override.get(_w("val")) is not None:
-                    start_overrides[ilvl] = int(start_override.get(_w("val")))
+                    start = _bounded_int(
+                        start_override.get(_w("val")),
+                        1,
+                        _MAX_NUMBERING_START,
+                    )
+                    if start is not None:
+                        start_overrides[ilvl] = start
                 lvl = override.find(_w("lvl"))
                 if lvl is not None:
                     parsed = self._parse_level(lvl)
@@ -136,16 +169,20 @@ class _NumberingModel:
         raw_ilvl = lvl.get(_w("ilvl"))
         if raw_ilvl is None:
             return None
+        ilvl = _bounded_int(raw_ilvl, 0, _MAX_WORD_LEVEL)
+        if ilvl is None:
+            return None
         num_fmt_el = lvl.find(_w("numFmt"))
         lvl_text_el = lvl.find(_w("lvlText"))
         start_el = lvl.find(_w("start"))
         num_fmt = num_fmt_el.get(_w("val")) if num_fmt_el is not None else "decimal"
         lvl_text = lvl_text_el.get(_w("val")) if lvl_text_el is not None else ""
-        try:
-            start = int(start_el.get(_w("val"))) if start_el is not None else 1
-        except (TypeError, ValueError):
-            start = 1
-        return int(raw_ilvl), _Level(num_fmt or "decimal", lvl_text or "", start)
+        start = (
+            _bounded_int(start_el.get(_w("val")), 1, _MAX_NUMBERING_START)
+            if start_el is not None
+            else None
+        )
+        return ilvl, _Level(num_fmt or "decimal", lvl_text or "", start or 1)
 
     def _load_styles(self, root) -> None:
         for style in root.iter(_w("style")):
@@ -164,7 +201,14 @@ class _NumberingModel:
                     if num_id_el is not None and num_id_el.get(_w("val")) is not None:
                         ilvl = 0
                         if ilvl_el is not None and ilvl_el.get(_w("val")) is not None:
-                            ilvl = int(ilvl_el.get(_w("val")))
+                            parsed_ilvl = _bounded_int(
+                                ilvl_el.get(_w("val")),
+                                0,
+                                _MAX_WORD_LEVEL,
+                            )
+                            if parsed_ilvl is None:
+                                continue
+                            ilvl = parsed_ilvl
                         numpr = (int(num_id_el.get(_w("val"))), ilvl)
             self.styles[style_id] = (based_on, numpr)
 
@@ -211,7 +255,12 @@ class NumberingResolver:
     not advance counters, and w:lvlRestart is not honoured.
     """
 
-    def resolve(self, data: bytes, raw_doc: RawDocument) -> NumberingResolveResult:
+    def resolve(
+        self,
+        data: bytes,
+        raw_doc: RawDocument,
+        revision_map: dict[str, RevisionData],
+    ) -> NumberingResolveResult:
         para_blocks = [b for b in raw_doc.blocks if isinstance(b, RawParagraph)]
         model = _NumberingModel.load(data)
         out: dict[str, NumberingData] = {}
@@ -220,65 +269,183 @@ class NumberingResolver:
         counters: dict[int, dict[int, int]] = {}
         # (num_id, ilvl) pairs that already applied their startOverride
         applied_overrides: set[tuple[int, int]] = set()
+        rendered_chars = 0
 
         for p in para_blocks:
-            num_id, ilvl = self._effective_numpr(p, model)
-            if p.num_id is not None and p.num_id != 0 and p.num_id not in model.nums:
+            revision = revision_map.get(p.block_id)
+            num_id, ilvl = self._effective_numpr(p, model, revision)
+            if num_id is not None and num_id != 0 and num_id not in model.nums:
                 diags.append(ResolverDiagnostic(
                     level="warning",
                     component="numbering",
                     code="UNKNOWN_NUMID",
-                    message=f"numId {p.num_id} not found in numbering.xml",
+                    message=f"numId {p.num_id} отсутствует в numbering.xml",
                     block_id=p.block_id,
                 ))
 
-            rendered = None
-            if num_id is not None:
-                rendered = self._advance_and_render(model, counters, applied_overrides, num_id, ilvl)
+            exists_in_original = revision.exists_in_original if revision is not None else True
+            numbering_text = (
+                revision.original_text
+                if exists_in_original and revision is not None
+                else revision.accepted_text
+                if revision is not None
+                else p.text()
+            )
+            native_level = self._native_level(model, num_id, ilvl)
+            structural_level = ilvl if num_id is not None else None
 
-            typed = REGEX_NUMBER.match(p.text())
-            if rendered is not None:
-                confidence = 0.95
-                if typed and typed.group(1).rstrip(".") != rendered.rstrip("."):
-                    confidence = 0.6
-                    diags.append(ResolverDiagnostic(
-                        level="warning",
-                        component="numbering",
-                        code="NUMBERING_TEXT_MISMATCH",
-                        message=(
-                            f"computed number {rendered!r} disagrees with the number "
-                            f"typed in the paragraph text ({typed.group(1)!r})"
-                        ),
-                        block_id=p.block_id,
-                    ))
-                out[p.block_id] = NumberingData(rendered_number=rendered, confidence=confidence, source="native")
+            if native_level is not None:
+                if exists_in_original:
+                    rendered, rendered_chars = self._advance_and_render(
+                        model,
+                        counters,
+                        applied_overrides,
+                        num_id,
+                        ilvl,
+                        rendered_chars,
+                    )
+                else:
+                    rendered = None
+                if rendered is not None:
+                    confidence = 0.95
+                    typed = REGEX_NUMBER.match(numbering_text)
+                    if typed:
+                        typed_length = typed.end(1) - typed.start(1)
+                        if typed_length > _MAX_DIAGNOSTIC_NUMBER_CHARS:
+                            typed_display = f"<номер длиной {typed_length} символов>"
+                            mismatch = True
+                        else:
+                            typed_value = typed.group(1)
+                            typed_display = repr(typed_value)
+                            mismatch = typed_value.rstrip(".") != rendered.rstrip(".")
+                    else:
+                        typed_display = ""
+                        mismatch = False
+                    if mismatch:
+                        confidence = 0.6
+                        diags.append(ResolverDiagnostic(
+                            level="warning",
+                            component="numbering",
+                            code="NUMBERING_TEXT_MISMATCH",
+                            message=(
+                                f"Вычисленный номер {rendered!r} не совпадает с номером "
+                                f"в тексте абзаца ({typed_display})"
+                            ),
+                            block_id=p.block_id,
+                        ))
+                    out[p.block_id] = NumberingData(
+                        rendered_number=rendered,
+                        confidence=confidence,
+                        source="native",
+                        numbering_level=structural_level,
+                    )
+                    continue
+                if not exists_in_original:
+                    out[p.block_id] = NumberingData(
+                        rendered_number=None,
+                        confidence=0.95,
+                        source="native",
+                        numbering_level=structural_level,
+                    )
+                    continue
+                out[p.block_id] = NumberingData(
+                    rendered_number=None,
+                    confidence=0.95,
+                    source="native",
+                    numbering_level=structural_level,
+                )
                 continue
 
+            typed = REGEX_NUMBER.match(numbering_text)
             if typed:
-                num = typed.group(1)
-                if not num.endswith("."):
-                    num += "."
-                out[p.block_id] = NumberingData(rendered_number=num, confidence=0.7, source="regex")
+                typed_end = typed.end(1)
+                typed_length = typed_end - typed.start(1)
+                number_length = typed_length + (0 if numbering_text[typed_end - 1] == "." else 1)
+                capture_allowed = number_length <= _MAX_RENDERED_NUMBER_CHARS and (
+                    not exists_in_original
+                    or number_length <= _MAX_DOCUMENT_RENDERED_CHARS - rendered_chars
+                )
+                if capture_allowed:
+                    num = typed.group(1)
+                    if not num.endswith("."):
+                        num += "."
+                    numbering_level = self._regex_level(typed)
+                else:
+                    num = None
+                    numbering_level = None
+                out[p.block_id] = NumberingData(
+                    rendered_number=None if not exists_in_original else num,
+                    confidence=0.7,
+                    source="regex",
+                    numbering_level=numbering_level,
+                )
+                if exists_in_original and num is not None:
+                    rendered_chars += len(num)
                 continue
 
-            out[p.block_id] = NumberingData(rendered_number=None, confidence=0.0, source="unmapped")
+            out[p.block_id] = NumberingData(
+                rendered_number=None,
+                confidence=0.0,
+                source="unmapped",
+                numbering_level=structural_level,
+            )
 
         for p in para_blocks:
             nd = out[p.block_id]
-            if nd.rendered_number is not None and nd.confidence < LOW_CONFIDENCE_THRESHOLD:
+            if (
+                nd.source == "native"
+                and nd.rendered_number is not None
+                and nd.confidence < LOW_CONFIDENCE_THRESHOLD
+            ):
                 diags.append(ResolverDiagnostic(
                     level="warning",
                     component="numbering",
                     code="LOW_CONFIDENCE",
-                    message=f"low confidence for paragraph {p.block_id} ({nd.confidence:.2f})",
+                    message=(
+                        f"Низкая уверенность нумерации для абзаца {p.block_id} "
+                        f"({nd.confidence:.2f})"
+                    ),
                     block_id=p.block_id,
                 ))
         return out, diags
 
-    def _effective_numpr(self, p: RawParagraph, model: _NumberingModel) -> tuple[int | None, int]:
+    @staticmethod
+    def _native_level(model: _NumberingModel, num_id: int | None, ilvl: int):
+        if num_id is None:
+            return None
+        levels = model.effective_levels(num_id)
+        level = levels.get(ilvl) if levels is not None else None
+        if level is None or level.num_fmt in ("bullet", "none"):
+            return None
+        return level
+
+    @staticmethod
+    def _regex_level(match: re.Match[str]) -> int:
+        return len(match.group(1).rstrip(".").split(".")) - 1
+
+    def _effective_numpr(
+        self,
+        p: RawParagraph,
+        model: _NumberingModel,
+        revision: RevisionData | None = None,
+    ) -> tuple[int | None, int]:
+        if revision is not None and revision.exists_in_original and revision.original_ppr_change:
+            if revision.original_numpr_present:
+                if revision.original_num_id is None or revision.original_num_id == 0:
+                    return None, 0
+                if revision.original_ilvl is not None and not 0 <= revision.original_ilvl <= _MAX_WORD_LEVEL:
+                    return None, 0
+                return revision.original_num_id, revision.original_ilvl or 0
+            if revision.original_style_id:
+                numpr = model.style_numpr(revision.original_style_id)
+                if numpr is not None and numpr[0] != 0:
+                    return numpr
+            return None, 0
         if p.num_id is not None:
             # numId 0 is Word's way of saying "numbering removed here".
             if p.num_id == 0:
+                return None, 0
+            if p.ilvl is not None and not 0 <= p.ilvl <= _MAX_WORD_LEVEL:
                 return None, 0
             return p.num_id, p.ilvl or 0
         if p.style_id:
@@ -294,25 +461,32 @@ class NumberingResolver:
         applied_overrides: set[tuple[int, int]],
         num_id: int,
         ilvl: int,
-    ) -> str | None:
+        rendered_chars: int,
+    ) -> tuple[str | None, int]:
         num = model.nums.get(num_id)
         levels = model.effective_levels(num_id)
         if num is None or levels is None or ilvl not in levels:
-            return None
+            return None, rendered_chars
         level = levels[ilvl]
         if level.num_fmt in ("bullet", "none"):
             # Bulleted lists are not clause numbers.
-            return None
+            return None, rendered_chars
+        if rendered_chars >= _MAX_DOCUMENT_RENDERED_CHARS:
+            return None, rendered_chars
 
         c = counters.setdefault(num.abstract_id, {})
         if ilvl in c:
-            c[ilvl] += 1
+            counter = c[ilvl] + 1
         else:
-            c[ilvl] = level.start
+            counter = level.start
         if (num_id, ilvl) not in applied_overrides:
             applied_overrides.add((num_id, ilvl))
             if ilvl in num.start_overrides:
-                c[ilvl] = num.start_overrides[ilvl]
+                counter = num.start_overrides[ilvl]
+        if counter > _MAX_DERIVED_COUNTER:
+            c[ilvl] = _MAX_DERIVED_COUNTER + 1
+            return None, rendered_chars
+        c[ilvl] = counter
         # A new item at this level restarts all deeper levels.
         for deeper in [lv for lv in c if lv > ilvl]:
             del c[deeper]
@@ -321,11 +495,51 @@ class NumberingResolver:
             if ancestor not in c and ancestor in levels:
                 c[ancestor] = levels[ancestor].start
 
-        def substitute(match: re.Match[str]) -> str:
+        remaining_chars = min(
+            _MAX_RENDERED_NUMBER_CHARS,
+            _MAX_DOCUMENT_RENDERED_CHARS - rendered_chars,
+        )
+        rendered = self._render_level_text(levels, c, level.lvl_text, remaining_chars)
+        if rendered is None:
+            return None, rendered_chars
+        return rendered, rendered_chars + len(rendered)
+
+    @staticmethod
+    def _render_level_text(
+        levels: dict[int, _Level],
+        counters: dict[int, int],
+        lvl_text: str,
+        budget: int,
+    ) -> str | None:
+        if len(lvl_text) > _MAX_LVL_TEXT_SOURCE_CHARS:
+            return None
+        parts: list[str] = []
+        output_length = 0
+        last_end = 0
+        for match in _PLACEHOLDER.finditer(lvl_text):
+            literal_length = match.start() - last_end
+            if output_length + literal_length > budget:
+                return None
+            if literal_length:
+                parts.append(lvl_text[last_end:match.start()])
+                output_length += literal_length
+
             ref = int(match.group(1)) - 1
             ref_level = levels.get(ref)
-            value = c.get(ref, ref_level.start if ref_level else 1)
-            return _format_value(value, ref_level.num_fmt if ref_level else "decimal")
+            value = counters.get(ref, ref_level.start if ref_level else 1)
+            if value > _MAX_DERIVED_COUNTER:
+                return None
+            formatted = _format_value(value, ref_level.num_fmt if ref_level else "decimal")
+            if output_length + len(formatted) > budget:
+                return None
+            parts.append(formatted)
+            output_length += len(formatted)
+            last_end = match.end()
 
-        rendered = _PLACEHOLDER.sub(substitute, level.lvl_text).strip()
+        tail_length = len(lvl_text) - last_end
+        if output_length + tail_length > budget:
+            return None
+        if tail_length:
+            parts.append(lvl_text[last_end:])
+        rendered = "".join(parts).strip()
         return rendered or None

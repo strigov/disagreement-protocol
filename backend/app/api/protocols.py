@@ -126,6 +126,28 @@ def _restore_table_cell(table_block_id: str, row_index: int, cell_index: int, ce
     )
 
 
+def _restore_paragraph(paragraph_data: dict, fallback_confidence: float) -> EnrichedParagraph:
+    return EnrichedParagraph(
+        block_id=paragraph_data.get("block_id", ""),
+        text_runs=paragraph_data.get("text_runs", paragraph_data.get("accepted_text", "")),
+        num_id=paragraph_data.get("num_id"),
+        ilvl=paragraph_data.get("ilvl"),
+        original_text=paragraph_data.get("original_text", ""),
+        accepted_text=paragraph_data.get("accepted_text", ""),
+        revisions=tuple(
+            RevisionRecord(
+                type=revision.get("type", ""),
+                text=revision.get("text", ""),
+                author=revision.get("author", ""),
+            )
+            for revision in (paragraph_data.get("revisions") or [])
+        ),
+        rendered_number=paragraph_data.get("rendered_number"),
+        numbering_confidence=paragraph_data.get("numbering_confidence", fallback_confidence),
+        numbering_level=paragraph_data.get("numbering_level"),
+    )
+
+
 def _serialize_row(row: ProtocolRow) -> ProtocolRowOut:
     return ProtocolRowOut(
         id=row.id,
@@ -169,22 +191,34 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
     for cm in clause_models:
         clause = ClauseDC(clause_key=cm.clause_key, label=cm.label, level=cm.level, parent_key=cm.parent_key)
         clause.flags = set(cm.flags or [])
-        clause.paragraphs.append(
-            EnrichedParagraph(
-                block_id=cm.clause_key,
-                text_runs=cm.accepted_text,
-                num_id=None,
-                ilvl=cm.level,
-                original_text=cm.original_text,
-                accepted_text=cm.accepted_text,
-                revisions=tuple(
-                    RevisionRecord(type=r.get("type", ""), text=r.get("text", ""), author=r.get("author", ""))
-                    for r in (cm.revisions or [])
+        paragraphs_payload = getattr(cm, "paragraphs_json", None)
+        if paragraphs_payload is not None:
+            clause.paragraphs.extend(
+                _restore_paragraph(paragraph_data, cm.confidence or 0.0)
+                for paragraph_data in paragraphs_payload
+            )
+        else:
+            clause.paragraphs.append(
+                EnrichedParagraph(
+                    block_id=cm.clause_key,
+                    text_runs=cm.accepted_text,
+                    num_id=None,
+                    ilvl=None,
+                    original_text=cm.original_text,
+                    accepted_text=cm.accepted_text,
+                    revisions=tuple(
+                        RevisionRecord(
+                            type=r.get("type", ""),
+                            text=r.get("text", ""),
+                            author=r.get("author", ""),
+                        )
+                        for r in (cm.revisions or [])
+                    ),
+                    rendered_number=None,
+                    numbering_confidence=cm.confidence or 0.0,
+                    numbering_level=None,
                 ),
-                rendered_number=cm.label,
-                numbering_confidence=cm.confidence,
-            ),
-        )
+            )
         for table in cm.tables_json or []:
             rows_dc: list[RawTableRow] = []
             for row_index, row_cells in enumerate(table.get("rows", [])):

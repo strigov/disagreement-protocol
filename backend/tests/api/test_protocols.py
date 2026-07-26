@@ -11,6 +11,7 @@ from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.models.party import Party
 from app.models.protocol import Protocol, ProtocolRow
+from app.services.protocol_generator import ProtocolRowBuilder
 
 
 class FakeQuery:
@@ -241,6 +242,101 @@ def doc_with_versioned_table_cells() -> Iterator[Document]:
         app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def doc_with_paragraph_payload() -> Iterator[tuple[Document, FakeDb]]:
+    doc = Document(
+        id=uuid.uuid4(),
+        original_filename="annex.docx",
+        storage_key="annex-key",
+        contract_name="Договор",
+        status=DocumentStatus.PARTIES_CONFIRMED,
+    )
+    p1 = Party(id=uuid.uuid4(), document_id=doc.id, name="ООО Ромашка", role="Арендодатель", confidence=0.9)
+    p2 = Party(id=uuid.uuid4(), document_id=doc.id, name="АО Василёк", role="Арендатор", confidence=0.9)
+    doc.drafting_party_id = p2.id
+    clause = ClauseModel(
+        id=uuid.uuid4(),
+        document_id=doc.id,
+        clause_key="c_p_0007",
+        label="Приложение № 1",
+        level=0,
+        parent_key=None,
+        sort_order=0,
+        original_text="Старое\nПродолжение",
+        accepted_text="Новое\nПродолжение",
+        flags=[],
+        confidence=0.99,
+        revisions=[],
+        paragraphs_json=[
+            {
+                "block_id": "p_0007",
+                "text_runs": "Старое",
+                "num_id": 1,
+                "ilvl": 0,
+                "original_text": "Старое",
+                "accepted_text": "Новое",
+                "revisions": [
+                    {"type": "DEL", "text": "Старое", "author": "Юрист"},
+                    {"type": "INS", "text": "Новое", "author": "Юрист"},
+                ],
+                "rendered_number": "1.",
+                "numbering_confidence": 0.8,
+                "numbering_level": 0,
+            },
+            {
+                "block_id": "p_0008",
+                "text_runs": "Продолжение",
+                "num_id": 1,
+                "ilvl": 1,
+                "original_text": "Продолжение",
+                "accepted_text": "Продолжение",
+                "revisions": [],
+                "rendered_number": "1.1.",
+                "numbering_confidence": 0.6,
+                "numbering_level": 1,
+            },
+        ],
+    )
+    second_clause = ClauseModel(
+        id=uuid.uuid4(),
+        document_id=doc.id,
+        clause_key="c_p_0009",
+        label="2.",
+        level=0,
+        parent_key=None,
+        sort_order=1,
+        original_text="Без изменений",
+        accepted_text="Без изменений",
+        flags=[],
+        confidence=0.4,
+        revisions=[],
+        paragraphs_json=[
+            {
+                "block_id": "p_0009",
+                "text_runs": "Без изменений",
+                "num_id": 1,
+                "ilvl": 0,
+                "original_text": "Без изменений",
+                "accepted_text": "Без изменений",
+                "revisions": [],
+                "rendered_number": "2.",
+                "numbering_confidence": 0.4,
+                "numbering_level": 0,
+            },
+        ],
+    )
+    db = FakeDb(doc, [p1, p2], [clause, second_clause])
+
+    def dependency_override() -> Iterator[FakeDb]:
+        yield db
+
+    app.dependency_overrides[get_db] = dependency_override
+    try:
+        yield doc, db
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_build_protocol_creates_rows(doc_with_changes):
     doc, _, _ = doc_with_changes
     with TestClient(app) as client:
@@ -265,6 +361,34 @@ def test_build_protocol_round_trips_versioned_and_legacy_table_cells(doc_with_ve
     assert row["party_2_text"] == "2026 год | 1 100 | 192 500\nlegacy cell"
     assert "1 2001 100" not in row["party_1_text"] + row["party_2_text"]
     assert "TABLE_CELL_CHANGE" in row["flags"]
+
+
+def test_build_protocol_restores_paragraph_payload_and_exact_confidence_mean(
+    doc_with_paragraph_payload,
+    monkeypatch,
+):
+    doc, _ = doc_with_paragraph_payload
+    captured_clauses = []
+    original_build = ProtocolRowBuilder.build
+
+    def capture_build(builder, clauses, context):
+        captured_clauses.extend(clauses)
+        return original_build(builder, clauses, context)
+
+    monkeypatch.setattr(ProtocolRowBuilder, "build", capture_build)
+
+    with TestClient(app) as client:
+        response = client.post(f"/api/documents/{doc.id}/protocol")
+
+    assert response.status_code == 201, response.text
+    row = response.json()["rows"][0]
+    assert row["point_label"] == "Приложение № 1"
+    assert row["party_1_text"] == "Старое\nПродолжение"
+    assert row["party_2_text"] == "Новое\nПродолжение"
+    restored_paragraphs = captured_clauses[0].paragraphs
+    assert [paragraph.rendered_number for paragraph in restored_paragraphs] == ["1.", "1.1."]
+    assert all(paragraph.rendered_number != "Приложение № 1" for paragraph in restored_paragraphs)
+    assert doc.validation_report["numbering_confidence_mean"] == pytest.approx(0.6)
 
 
 def test_patch_row_marks_user_edited(doc_with_changes):

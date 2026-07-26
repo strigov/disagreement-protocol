@@ -19,9 +19,10 @@ class Clause(Base):
     original_text: Mapped[str] = mapped_column(Text, default="")
     accepted_text: Mapped[str] = mapped_column(Text, default="")
     flags: Mapped[list[str]] = mapped_column(JSON, default=list)
-    confidence: Mapped[float] = mapped_column(default=1.0)
+    confidence: Mapped[float] = mapped_column(default=0.0)
     revisions: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    paragraphs_json: Mapped[list[dict]] = mapped_column(JSON, default=list)
     # Serialized tables attached to this clause: list of
-    # {"block_id": str, "has_revisions": bool, "rows": [[cell_text, ...], ...]}.
+    # {"block_id": str, "has_revisions": bool, "rows": [[cell_object, ...], ...]}.
     # Empty list when the clause has no tables.
     tables_json: Mapped[list[dict]] = mapped_column(JSON, default=list)

@@ -48,6 +48,7 @@ def test_models_register_expected_bootstrap_tables_and_columns():
     clauses = Base.metadata.tables["clauses"]
     assert "document_id" in clauses.c
     assert "flags" in clauses.c
+    assert "paragraphs_json" in clauses.c
     assert "tables_json" in clauses.c
 
     protocol_rows = Base.metadata.tables["protocol_rows"]

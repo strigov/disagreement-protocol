@@ -13,7 +13,8 @@ phases:
     commits: "4e5da52.."
   - id: Ф3
     scope: "Нумерация исходного договора и достоверная confidence-метрика"
-    status: in-progress
+    status: done
+    commits: "0d2d989.."
   - id: Ф4
     scope: "Backend: стороны, падежи и причина ошибки анализа"
     status: pending

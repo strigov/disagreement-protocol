@@ -37,6 +37,9 @@ def process_document(document_id: str) -> None:
             return
 
         for idx, clause in enumerate(result["clauses"]):
+            paragraph_confidences = [
+                paragraph.numbering_confidence for paragraph in clause.paragraphs
+            ]
             db.add(
                 ClauseModel(
                     document_id=doc.id,
@@ -48,11 +51,37 @@ def process_document(document_id: str) -> None:
                     original_text="\n".join(paragraph.original_text for paragraph in clause.paragraphs),
                     accepted_text="\n".join(paragraph.accepted_text for paragraph in clause.paragraphs),
                     flags=sorted(clause.flags),
-                    confidence=1.0,
+                    confidence=(
+                        sum(paragraph_confidences) / len(paragraph_confidences)
+                        if paragraph_confidences
+                        else 0.0
+                    ),
                     revisions=[
                         {"type": revision.type, "text": revision.text, "author": revision.author}
                         for paragraph in clause.paragraphs
                         for revision in paragraph.revisions
+                    ],
+                    paragraphs_json=[
+                        {
+                            "block_id": paragraph.block_id,
+                            "text_runs": paragraph.text_runs,
+                            "num_id": paragraph.num_id,
+                            "ilvl": paragraph.ilvl,
+                            "original_text": paragraph.original_text,
+                            "accepted_text": paragraph.accepted_text,
+                            "revisions": [
+                                {
+                                    "type": revision.type,
+                                    "text": revision.text,
+                                    "author": revision.author,
+                                }
+                                for revision in paragraph.revisions
+                            ],
+                            "rendered_number": paragraph.rendered_number,
+                            "numbering_confidence": paragraph.numbering_confidence,
+                            "numbering_level": paragraph.numbering_level,
+                        }
+                        for paragraph in clause.paragraphs
                     ],
                     tables_json=[
                         {

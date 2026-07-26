@@ -5,15 +5,19 @@ from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.models.party import Party
 from app.services.processing import process_document
-from tests.fixtures.builders import build_docx_with_table_cell_replacement
+from tests.fixtures.builders import (
+    build_docx_with_manual_numbering,
+    build_docx_with_table_cell_replacement,
+)
 
 
 class _FakeStorage:
-    def __init__(self, data: bytes) -> None:
+    def __init__(self, data: bytes, key: str = "table-key") -> None:
         self.data = data
+        self.key = key
 
     def get(self, key: str) -> bytes:
-        assert key == "table-key"
+        assert key == self.key
         return self.data
 
 
@@ -80,3 +84,42 @@ def test_process_document_persists_versioned_table_cells(monkeypatch):
         "accepted_text": "Итого",
         "revisions": [],
     }
+
+
+def test_process_document_persists_paragraphs_and_real_confidence(monkeypatch):
+    document = Document(
+        id=uuid.uuid4(),
+        original_filename="manual.docx",
+        storage_key="manual-key",
+        contract_name="Договор",
+        status=DocumentStatus.UPLOADED,
+    )
+    db = _FakeSession(document)
+
+    monkeypatch.setattr("app.services.processing.SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        "app.services.processing.FileStorage",
+        lambda: _FakeStorage(
+            build_docx_with_manual_numbering(["1. Первый пункт", "2. Второй пункт"]),
+            "manual-key",
+        ),
+    )
+
+    process_document(str(document.id))
+
+    first_clause = next(clause for clause in db.clauses if clause.paragraphs_json)
+    assert first_clause.confidence == 0.7
+    assert first_clause.paragraphs_json == [
+        {
+            "block_id": "p_0001",
+            "text_runs": "1. Первый пункт",
+            "num_id": None,
+            "ilvl": None,
+            "original_text": "1. Первый пункт",
+            "accepted_text": "1. Первый пункт",
+            "revisions": [],
+            "rendered_number": "1.",
+            "numbering_confidence": 0.7,
+            "numbering_level": 0,
+        },
+    ]

@@ -148,6 +148,8 @@ class ClauseSegmenter:
         return clauses
 
     def _level_of(self, paragraph: EnrichedParagraph) -> int | None:
+        if paragraph.numbering_level is not None:
+            return paragraph.numbering_level
         if paragraph.num_id is not None and paragraph.ilvl is not None:
             return paragraph.ilvl
         if paragraph.rendered_number:

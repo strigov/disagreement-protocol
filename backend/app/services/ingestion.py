@@ -103,7 +103,7 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
     parser = OOXMLParser()
     raw = parser.parse(data)
     revisions, revision_diags = RevisionResolver().resolve(data, raw)
-    numbering, numbering_diags = NumberingResolver().resolve(data, raw)
+    numbering, numbering_diags = NumberingResolver().resolve(data, raw, revisions)
 
     segmenter_blocks: list[EnrichedParagraph | RawTable] = []
     for block in raw.blocks:
@@ -120,6 +120,7 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
                 revisions=rd.revisions if rd else (),
                 rendered_number=nd.rendered_number if nd else None,
                 numbering_confidence=nd.confidence if nd else 0.0,
+                numbering_level=nd.numbering_level if nd else None,
             )
             segmenter_blocks.append(enriched)
         elif isinstance(block, RawTable):

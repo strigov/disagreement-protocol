@@ -7,7 +7,13 @@ from app.processing.types import (
 )
 
 
-def _ep(block_id: str, text: str, num: str | None, level: int | None) -> EnrichedParagraph:
+def _ep(
+    block_id: str,
+    text: str,
+    num: str | None,
+    level: int | None,
+    numbering_level: int | None = None,
+) -> EnrichedParagraph:
     return EnrichedParagraph(
         block_id=block_id,
         text_runs=text,
@@ -18,6 +24,7 @@ def _ep(block_id: str, text: str, num: str | None, level: int | None) -> Enriche
         revisions=(),
         rendered_number=num,
         numbering_confidence=1.0 if num else 0.0,
+        numbering_level=numbering_level,
     )
 
 
@@ -50,6 +57,20 @@ def test_continuation_paragraph_attaches_to_current_clause():
     assert len(clauses) == 2
     assert len(clauses[0].paragraphs) == 2
     assert "MULTI_PARAGRAPH" in clauses[0].flags
+
+
+def test_inserted_paragraph_with_structural_level_is_separate_nested_clause():
+    paras = [
+        _ep("p_0001", "1. Раздел", "1.", 0),
+        _ep("p_0002", "1.1. Исходный подпункт", "1.1.", 1),
+        _ep("p_0003", "Вставленный подпункт", None, None, numbering_level=1),
+    ]
+
+    clauses = ClauseSegmenter().segment(paras)
+
+    assert [clause.label for clause in clauses] == ["1.", "1.1.", "Вставленный подпункт"]
+    assert clauses[2].level == 1
+    assert clauses[2].parent_key == clauses[0].clause_key
 
 
 def test_nested_numbering_builds_parent_links():

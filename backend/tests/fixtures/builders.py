@@ -251,6 +251,10 @@ def build_docx_with_native_numbering(
     styles_xml: str | None = None,
     num_id: int = 1,
     style_ids: list[str | None] | None = None,
+    content_revisions: list[str | None] | None = None,
+    paragraph_mark_revisions: list[str | None] | None = None,
+    original_style_ids: list[str | None] | None = None,
+    original_num_prs: list[tuple[int | None, int | None] | None] | None = None,
 ) -> bytes:
     """Build a minimal DOCX package with real Word auto-numbering.
 
@@ -258,6 +262,23 @@ def build_docx_with_native_numbering(
     paragraph. `style_ids` (parallel to items) attaches w:pStyle without a
     direct numPr — for testing style-based numbering.
     """
+    if content_revisions is None:
+        content_revisions = [None] * len(items)
+    if paragraph_mark_revisions is None:
+        paragraph_mark_revisions = [None] * len(items)
+    if original_style_ids is None:
+        original_style_ids = [None] * len(items)
+    if original_num_prs is None:
+        original_num_prs = [None] * len(items)
+    if len(content_revisions) != len(items):
+        raise ValueError("content_revisions must match items length")
+    if len(paragraph_mark_revisions) != len(items):
+        raise ValueError("paragraph_mark_revisions must match items length")
+    if len(original_style_ids) != len(items):
+        raise ValueError("original_style_ids must match items length")
+    if len(original_num_prs) != len(items):
+        raise ValueError("original_num_prs must match items length")
+
     paragraphs = []
     for index, (ilvl, text) in enumerate(items):
         ppr_parts = []
@@ -268,8 +289,53 @@ def build_docx_with_native_numbering(
             ppr_parts.append(
                 f'<w:numPr><w:ilvl w:val="{ilvl}"/><w:numId w:val="{num_id}"/></w:numPr>'
             )
+        original_ppr_parts = []
+        original_style_id = original_style_ids[index]
+        if original_style_id is not None:
+            original_ppr_parts.append(f'<w:pStyle w:val="{original_style_id}"/>')
+        original_num_pr = original_num_prs[index]
+        if original_num_pr is not None:
+            original_num_id, original_ilvl = original_num_pr
+            num_pr_parts = []
+            if original_ilvl is not None:
+                num_pr_parts.append(f'<w:ilvl w:val="{original_ilvl}"/>')
+            if original_num_id is not None:
+                num_pr_parts.append(f'<w:numId w:val="{original_num_id}"/>')
+            original_ppr_parts.append(f'<w:numPr>{"".join(num_pr_parts)}</w:numPr>')
+        if original_ppr_parts:
+            ppr_parts.append(
+                f'<w:pPrChange w:id="ppr-{index}" w:author="Editor" '
+                'w:date="2026-01-01T00:00:00Z">'
+                f'<w:pPr>{"".join(original_ppr_parts)}</w:pPr>'
+                '</w:pPrChange>'
+            )
+        paragraph_mark_revision = paragraph_mark_revisions[index]
+        if paragraph_mark_revision is not None:
+            kind = paragraph_mark_revision.upper()
+            if kind not in ("INS", "DEL"):
+                raise ValueError("paragraph mark revision must be INS, DEL, or None")
+            tag = kind.lower()
+            ppr_parts.append(
+                f'<w:rPr><w:{tag} w:id="mark-{index}" w:author="Editor" '
+                'w:date="2026-01-01T00:00:00Z"/></w:rPr>'
+            )
         ppr = f"<w:pPr>{''.join(ppr_parts)}</w:pPr>" if ppr_parts else ""
-        paragraphs.append(f'<w:p>{ppr}<w:r><w:t xml:space="preserve">{text}</w:t></w:r></w:p>')
+        content_revision = content_revisions[index]
+        if content_revision is None:
+            content = f'<w:r><w:t xml:space="preserve">{text}</w:t></w:r>'
+        else:
+            kind = content_revision.upper()
+            if kind not in ("INS", "DEL"):
+                raise ValueError("content revision must be INS, DEL, or None")
+            tag = kind.lower()
+            text_tag = "delText" if kind == "DEL" else "t"
+            content = (
+                f'<w:{tag} w:id="content-{index}" w:author="Editor" '
+                'w:date="2026-01-01T00:00:00Z">'
+                f'<w:r><w:{text_tag} xml:space="preserve">{text}</w:{text_tag}></w:r>'
+                f'</w:{tag}>'
+            )
+        paragraphs.append(f'<w:p>{ppr}{content}</w:p>')
     document_xml = (
         f'<w:document xmlns:w="{W_NS}"><w:body>{"".join(paragraphs)}</w:body></w:document>'
     )
