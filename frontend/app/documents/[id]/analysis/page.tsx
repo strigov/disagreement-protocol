@@ -2,40 +2,110 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import type { AnalysisOut } from "@/lib/types";
+import type { AnalysisOut, DocumentStatus } from "@/lib/types";
+
+// What this screen does for every status the backend can report. The Record is
+// exhaustive on purpose: adding a status to `DocumentStatus` forces a decision
+// here instead of silently landing in the polling branch.
+//   poll   — the backend is still working, ask again
+//   report — terminal, the preflight report is what the user came for
+//   failed — terminal, the document carries a processing error
+type StatusMode = "poll" | "report" | "failed";
+
+const STATUS_MODE: Record<DocumentStatus, StatusMode> = {
+  uploaded: "poll",
+  parsing: "poll",
+  parsed: "report",
+  parties_confirmed: "report",
+  built: "report",
+  exported: "report",
+  failed: "failed",
+};
+
+// A status the frontend does not know is terminal too: keeping the poll alive
+// would leave the user staring at the spinner forever.
+const modeOf = (status: string): StatusMode | undefined =>
+  Object.hasOwn(STATUS_MODE, status) ? STATUS_MODE[status as DocumentStatus] : undefined;
+
+const POLL_INTERVAL_MS = 1000;
+
+type PageError = { title: string; detail: string };
 
 export default function AnalysisPage({ params }: { params: { id: string } }) {
   const [analysis, setAnalysis] = useState<AnalysisOut | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<PageError | null>(null);
   const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
     const tick = async () => {
       try {
         const a = await api.getAnalysis(params.id);
         if (cancelled) return;
         setAnalysis(a);
-        if (a.status === "parsed" || a.status === "parties_confirmed") return;
-        if (a.status === "failed") {
-          setError("Ошибка обработки документа");
+        const mode = modeOf(a.status);
+        if (mode === "poll") {
+          timer = setTimeout(tick, POLL_INTERVAL_MS);
           return;
         }
-        setTimeout(tick, 1000);
+        if (mode === "failed") {
+          setError({
+            title: "Документ не удалось обработать",
+            // An older backend omits error_message entirely.
+            detail: a.error_message?.trim() || "Ошибка обработки документа",
+          });
+          return;
+        }
+        if (mode === undefined) {
+          setError({
+            title: "Неизвестный статус документа",
+            detail: `Сервер вернул статус «${a.status}». Обновите страницу или загрузите документ заново.`,
+          });
+        }
       } catch (e) {
-        if (!cancelled) setError((e as Error).message);
+        if (!cancelled) {
+          setError({
+            title: "Не удалось загрузить анализ",
+            detail: (e as Error).message,
+          });
+        }
       }
     };
+
     tick();
     return () => {
       cancelled = true;
+      if (timer !== undefined) clearTimeout(timer);
     };
   }, [params.id]);
 
-  if (error) return <main className="p-8 text-red-600">{error}</main>;
-  if (!analysis) return <main className="p-8">Анализируем документ…</main>;
-  if (analysis.status !== "parsed" && analysis.status !== "parties_confirmed") {
-    return <main className="p-8">Анализируем документ…</main>;
+  if (error) {
+    return (
+      <main className="mx-auto max-w-3xl space-y-4 px-4 py-12">
+        <div role="alert" className="space-y-2 rounded border border-red-200 bg-red-50 p-4">
+          <h1 className="text-2xl font-semibold tracking-tight text-red-900">{error.title}</h1>
+          <p className="text-red-800">{error.detail}</p>
+        </div>
+        <a
+          href="/"
+          className="inline-block text-sm text-blue-700 underline underline-offset-2 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        >
+          Загрузить другой документ
+        </a>
+      </main>
+    );
+  }
+
+  if (!analysis || modeOf(analysis.status) === "poll") {
+    return (
+      <main className="mx-auto max-w-3xl px-4 py-12" aria-busy="true">
+        <p role="status" aria-live="polite" className="text-gray-600">
+          Анализируем документ…
+        </p>
+      </main>
+    );
   }
 
   const m = analysis.preflight_metrics;
@@ -80,6 +150,11 @@ export default function AnalysisPage({ params }: { params: { id: string } }) {
             ))}
           </ul>
         </div>
+      )}
+      {!m && diagnostics.length === 0 && (
+        <p className="text-gray-600">
+          Метрики анализа для этого документа недоступны. Перейдите к сторонам договора.
+        </p>
       )}
       <button
         onClick={() => router.push(`/documents/${params.id}/parties`)}
