@@ -59,6 +59,42 @@ def build_docx_with_table(rows: list[list[str]], leading_paragraph: str = "") ->
     return buf.getvalue()
 
 
+def build_docx_with_non_element_nodes() -> bytes:
+    """Build a DOCX with XML comments and processing instructions in content."""
+    doc = DocxDocument()
+    body = doc._element.body
+
+    doc.add_paragraph("До body")
+    after_body_marker = doc.add_paragraph("После body")
+    first_paragraph = body[0]
+    body.insert(first_paragraph.getparent().index(first_paragraph) + 1, etree.Comment("между body blocks"))
+    body.insert(first_paragraph.getparent().index(first_paragraph) + 2, etree.ProcessingInstruction("converter", "между body blocks"))
+
+    run_paragraph = doc.add_paragraph()
+    run = run_paragraph.add_run("До run")
+    run_element = run._r
+    run_element.append(etree.Comment("внутри run"))
+    run_element.append(etree.ProcessingInstruction("converter", "внутри run"))
+    after_run = etree.SubElement(run_element, qn("w:t"))
+    after_run.text = " после run"
+    after_run.set(qn("xml:space"), "preserve")
+
+    table = doc.add_table(rows=1, cols=1)
+    cell_paragraph = table.cell(0, 0).paragraphs[0]
+    cell_run = cell_paragraph.add_run("До cell")
+    cell_run_element = cell_run._r
+    cell_run_element.append(etree.Comment("внутри cell"))
+    cell_run_element.append(etree.ProcessingInstruction("converter", "внутри cell"))
+    after_cell = etree.SubElement(cell_run_element, qn("w:t"))
+    after_cell.text = " после cell"
+    after_cell.set(qn("xml:space"), "preserve")
+
+    assert after_body_marker._p.getparent() is body
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
 def build_docx_with_deletion(
     before: str, deleted: str, after: str, author: str = "Editor"
 ) -> bytes:
@@ -79,6 +115,65 @@ def build_docx_with_deletion(
         t2 = etree.SubElement(r2, qn("w:t"))
         t2.text = after
         t2.set(qn("xml:space"), "preserve")
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_docx_with_format_only_revisions() -> bytes:
+    """Build a DOCX with one run and one paragraph formatting revision."""
+    doc = DocxDocument()
+    paragraph = doc.add_paragraph()
+    ppr = paragraph._p.get_or_add_pPr()
+    ppr_change = etree.SubElement(ppr, qn("w:pPrChange"))
+    ppr_change.set(qn("w:id"), "11")
+    ppr_change.set(qn("w:author"), "Автор абзаца")
+    ppr_change.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    etree.SubElement(ppr_change, qn("w:pPr"))
+
+    run = paragraph.add_run("Форматный текст")
+    rpr = run._r.get_or_add_rPr()
+    etree.SubElement(rpr, qn("w:b"))
+    rpr_change = etree.SubElement(rpr, qn("w:rPrChange"))
+    rpr_change.set(qn("w:id"), "12")
+    rpr_change.set(qn("w:author"), "Автор run")
+    rpr_change.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    etree.SubElement(rpr_change, qn("w:rPr"))
+
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_docx_with_empty_format_only_run() -> bytes:
+    """Build a DOCX with a format-only revision on an empty paragraph mark run."""
+    doc = DocxDocument()
+    paragraph = doc.add_paragraph()
+    run = paragraph.add_run()
+    rpr = run._r.get_or_add_rPr()
+    rpr_change = etree.SubElement(rpr, qn("w:rPrChange"))
+    rpr_change.set(qn("w:id"), "13")
+    rpr_change.set(qn("w:author"), "Автор paragraph mark")
+    rpr_change.set(qn("w:date"), "2026-01-01T00:00:00Z")
+    etree.SubElement(rpr_change, qn("w:rPr"))
+
+    buf = BytesIO()
+    doc.save(buf)
+    return buf.getvalue()
+
+
+def build_docx_with_many_run_format_only_revisions(change_count: int = 4) -> bytes:
+    """Build one run containing several run-format change elements."""
+    doc = DocxDocument()
+    paragraph = doc.add_paragraph("Много форматных правок")
+    rpr = paragraph.runs[0]._r.get_or_add_rPr()
+    for index in range(change_count):
+        rpr_change = etree.SubElement(rpr, qn("w:rPrChange"))
+        rpr_change.set(qn("w:id"), str(index + 1))
+        rpr_change.set(qn("w:author"), f"Автор {index + 1}")
+        rpr_change.set(qn("w:date"), "2026-01-01T00:00:00Z")
+        etree.SubElement(rpr_change, qn("w:rPr"))
+
     buf = BytesIO()
     doc.save(buf)
     return buf.getvalue()

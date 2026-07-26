@@ -46,7 +46,7 @@ class RevisionResolver:
                         level="warning",
                         component="revision",
                         code="FORMAT_ONLY_MISMATCH",
-                        message="format-only revisions detected (original==accepted)",
+                        message="Обнаружена форматная правка без изменения текста",
                         block_id=raw_p.block_id,
                     )
                 )
@@ -142,8 +142,59 @@ class RevisionResolver:
                 walk(child, revision_stack)
 
         walk(p_elem, [])
+        original_text = "".join(original_parts)
+        accepted_text = "".join(accepted_parts)
+
+        def run_text(run_elem) -> str:
+            parts: list[str] = []
+            for node in run_elem.iter():
+                if not isinstance(node.tag, str):
+                    continue
+                local = etree.QName(node.tag).localname
+                if local in ("t", "delText") and node.text:
+                    parts.append(node.text)
+                elif local == "tab":
+                    parts.append("\t")
+                elif local == "br":
+                    parts.append("\n")
+            return "".join(parts)
+
+        def containing_run(change_elem):
+            ancestor = change_elem.getparent()
+            while ancestor is not None:
+                if isinstance(ancestor.tag, str) and etree.QName(ancestor.tag).localname == "r":
+                    return ancestor
+                ancestor = ancestor.getparent()
+            return None
+
+        run_text_cache: dict[object, str] = {}
+        for change_elem in p_elem.iter():
+            if not isinstance(change_elem.tag, str):
+                continue
+            local = etree.QName(change_elem.tag).localname
+            if local == "rPrChange":
+                run_elem = containing_run(change_elem)
+                if run_elem is None:
+                    text = ""
+                else:
+                    if run_elem not in run_text_cache:
+                        run_text_cache[run_elem] = run_text(run_elem)
+                    text = run_text_cache[run_elem]
+                text = text or accepted_text
+            elif local == "pPrChange":
+                text = accepted_text
+            else:
+                continue
+            revisions.append(
+                RevisionRecord(
+                    type="FORMAT_ONLY",
+                    text=text,
+                    author=change_elem.get(f"{{{W_NS}}}author") or "",
+                ),
+            )
+
         return RevisionData(
-            original_text="".join(original_parts),
-            accepted_text="".join(accepted_parts),
+            original_text=original_text,
+            accepted_text=accepted_text,
             revisions=tuple(revisions),
         )

@@ -5,10 +5,11 @@ status: in-progress
 phases:
   - id: Ф1
     scope: "Безопасный разбор OOXML и реальные format-only правки"
-    status: in-progress
+    status: done
+    commits: "c6d4ea6.."
   - id: Ф2
     scope: "Исходная и принятая редакции таблиц сквозь весь round-trip"
-    status: pending
+    status: in-progress
   - id: Ф3
     scope: "Нумерация исходного договора и достоверная confidence-метрика"
     status: pending

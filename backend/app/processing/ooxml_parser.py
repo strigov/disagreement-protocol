@@ -46,6 +46,8 @@ class OOXMLParser:
 
     def _iter_block_children(self, elem):
         for child in elem:
+            if not isinstance(child.tag, str):
+                continue
             tag = etree.QName(child.tag).localname
             if tag in ("p", "tbl"):
                 yield child
@@ -73,6 +75,8 @@ class OOXMLParser:
         for r in p_elem.iter(f"{{{W_NS}}}r"):
             text_parts: list[str] = []
             for t in r.iter():
+                if not isinstance(t.tag, str):
+                    continue
                 local = etree.QName(t.tag).localname
                 if local in ("t", "delText") and t.text:
                     text_parts.append(t.text)

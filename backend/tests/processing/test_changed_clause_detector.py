@@ -1,5 +1,8 @@
 from app.processing.changed_clause_detector import ChangedClauseDetector
+from app.processing.ooxml_parser import OOXMLParser
+from app.processing.revision_resolver import RevisionResolver
 from app.processing.types import Clause, EnrichedParagraph, RevisionRecord
+from tests.fixtures.builders import build_docx_with_format_only_revisions
 
 
 def _ep_with_rev(
@@ -41,15 +44,20 @@ def test_detects_clause_with_textual_revision():
     assert len(changed) == 1
 
 
-def test_skips_clause_with_only_format_only_revisions():
+def test_skips_clause_with_only_format_only_revisions_from_resolver():
+    data = build_docx_with_format_only_revisions()
+    raw = OOXMLParser().parse(data)
+    revisions, _ = RevisionResolver().resolve(data, raw)
+    raw_paragraph = next(block for block in raw.blocks if block.block_id == "p_0001")
+    revision_data = revisions[raw_paragraph.block_id]
     paragraph = EnrichedParagraph(
-        block_id="p_0001",
-        text_runs="x",
-        num_id=1,
-        ilvl=0,
-        original_text="x",
-        accepted_text="x",
-        revisions=(RevisionRecord(type="FORMAT_ONLY", text=""),),
+        block_id=raw_paragraph.block_id,
+        text_runs=raw_paragraph.text(),
+        num_id=raw_paragraph.num_id,
+        ilvl=raw_paragraph.ilvl,
+        original_text=revision_data.original_text,
+        accepted_text=revision_data.accepted_text,
+        revisions=revision_data.revisions,
         rendered_number="1.",
         numbering_confidence=1.0,
     )

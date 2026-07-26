@@ -20,7 +20,10 @@ class ResolverDiagnostic:
       - "LOW_CONFIDENCE"       — numbering.confidence < 0.85
       - "NUMBERING_TEXT_MISMATCH" — computed number differs from the manual
         number typed at the start of the paragraph text
-      - "FORMAT_ONLY_MISMATCH" — revisions exist but original_text==accepted_text
+      - "FORMAT_ONLY_MISMATCH" — format-only revisions exist and
+        original_text==accepted_text; each w:rPrChange/w:pPrChange is one
+        RevisionRecord(type="FORMAT_ONLY") and is counted without making a
+        clause changed by itself
       - "MAPPING_MISMATCH"     — generic resolver could not map a block
     """
 

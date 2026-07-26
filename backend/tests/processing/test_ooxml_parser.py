@@ -1,6 +1,6 @@
 from app.processing.ooxml_parser import OOXMLParser
-from app.processing.types import RawDocument, RawParagraph
-from tests.fixtures.builders import build_simple_docx
+from app.processing.types import RawDocument, RawParagraph, RawTable
+from tests.fixtures.builders import build_docx_with_non_element_nodes, build_simple_docx
 
 
 def test_parse_returns_raw_document_with_paragraphs():
@@ -44,3 +44,24 @@ def test_parse_emits_raw_table_with_rows_and_cells():
     assert t.rows[1].cells[1].text() == "B2"
     # Each cell holds RawParagraph objects flagged as is_in_table.
     assert t.rows[0].cells[0].paragraphs[0].is_in_table is True
+
+
+def test_parse_ignores_comments_and_processing_instructions_everywhere():
+    data = build_docx_with_non_element_nodes()
+
+    doc = OOXMLParser().parse(data)
+
+    assert [type(block) for block in doc.blocks] == [
+        RawParagraph,
+        RawParagraph,
+        RawParagraph,
+        RawTable,
+    ]
+    paragraphs = [block for block in doc.blocks if isinstance(block, RawParagraph)]
+    assert [paragraph.text() for paragraph in paragraphs] == [
+        "До body",
+        "После body",
+        "До run после run",
+    ]
+    table = next(block for block in doc.blocks if isinstance(block, RawTable))
+    assert table.rows[0].cells[0].text() == "До cell после cell"

@@ -9,6 +9,7 @@ from app.services.protocol_generator import BuildContext, ProtocolRowBuilder
 from tests.fixtures.builders import (
     build_autonumbering_contract,
     build_deleted_clause_contract,
+    build_docx_with_format_only_revisions,
     build_multipar_contract,
     build_new_clause_contract,
     build_simple_contract_with_revision,
@@ -71,3 +72,21 @@ def test_deleted_clause_contract_produces_exclude_text():
     rows, _ = _full_run(build_deleted_clause_contract(), "Сторона2", "Сторона1")
     excl = [r for r in rows if r.party_2_text.startswith("Исключить пункт")]
     assert len(excl) >= 1
+
+
+def test_format_only_revision_counts_without_creating_changed_clause():
+    result = run_pipeline(build_docx_with_format_only_revisions())
+
+    assert result["preflight_metrics"]["format_only_count"] == 2
+    format_only_clause_keys = {
+        clause.clause_key
+        for clause in result["clauses"]
+        if any(
+            revision.type == "FORMAT_ONLY"
+            for paragraph in clause.paragraphs
+            for revision in paragraph.revisions
+        )
+    }
+    changed_clause_keys = {clause.clause_key for clause in result["changed_clauses"]}
+    assert format_only_clause_keys
+    assert format_only_clause_keys.isdisjoint(changed_clause_keys)
