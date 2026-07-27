@@ -30,8 +30,8 @@ def test_export_produces_docx_with_4col_table_and_headers():
     headers = [c.text for c in table.rows[0].cells]
     assert headers == [
         "Пункт договора",
-        "Редакция Арендодатель",
-        "Редакция Арендатор",
+        "Редакция Арендодателя",
+        "Редакция Арендатора",
         "Согласованная редакция",
     ]
     body = [c.text for c in table.rows[1].cells]

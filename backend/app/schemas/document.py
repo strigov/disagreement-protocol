@@ -29,6 +29,7 @@ class PreflightDiagnostic(BaseModel):
 class AnalysisOut(BaseModel):
     id: UUID
     status: str
+    error_message: str | None = None
     contract_name: str | None
     preflight_metrics: PreflightMetrics | None
     preflight_diagnostics: list[PreflightDiagnostic] = []
