@@ -17,12 +17,14 @@ phases:
     commits: "0d2d989.."
   - id: Ф4
     scope: "Backend: стороны, падежи и причина ошибки анализа"
-    status: in-progress
+    status: done
     parallel_group: G1
+    commits: "054baed..491d05b"
   - id: Ф5
     scope: "Frontend: терминальные статусы и понятные ошибки API"
-    status: in-progress
+    status: done
     parallel_group: G1
+    commits: "054baed..491d05b"
 ---
 
 # Disagreement Protocol — план исправления 10 диагностированных находок
