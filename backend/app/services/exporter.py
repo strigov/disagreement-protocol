@@ -5,6 +5,8 @@ from io import BytesIO
 from docx import Document as DocxDocument
 from docx.shared import Pt
 
+from app.services.protocol_generator import edition_label
+
 
 class ProtocolExporter:
     def export(
@@ -29,8 +31,8 @@ class ProtocolExporter:
         table.style = "Table Grid"
         headers = [
             "Пункт договора",
-            f"Редакция {counterparty_role}" if counterparty_role else "Редакция Стороны 1",
-            f"Редакция {drafting_role}" if drafting_role else "Редакция Стороны 2",
+            edition_label(counterparty_role, "Стороны 1"),
+            edition_label(drafting_role, "Стороны 2"),
             "Согласованная редакция",
         ]
         for index, header_text in enumerate(headers):

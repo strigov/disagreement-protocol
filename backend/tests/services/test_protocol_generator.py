@@ -10,7 +10,13 @@ from app.processing.types import (
     RevisionRecord,
     Run,
 )
-from app.services.protocol_generator import BuildContext, BuiltRow, ProtocolRowBuilder
+from app.services.protocol_generator import (
+    BuildContext,
+    BuiltRow,
+    ProtocolRowBuilder,
+    agreed_text_for_party,
+    edition_label,
+)
 
 
 def _make_clause(
@@ -103,6 +109,37 @@ def test_empty_role_falls_back_to_storona_2():
     rows = ProtocolRowBuilder().build([clause], ctx)
 
     assert rows[0].agreed_text == "Редакция Стороны 2"
+
+
+def test_edition_label_uses_genitive_for_known_roles():
+    expected = {
+        "Арендодатель": "Арендодателя",
+        "Арендатор": "Арендатора",
+        "Заказчик": "Заказчика",
+        "Исполнитель": "Исполнителя",
+        "Поставщик": "Поставщика",
+        "Покупатель": "Покупателя",
+        "Подрядчик": "Подрядчика",
+        "Продавец": "Продавца",
+        "Лицензиар": "Лицензиара",
+        "Лицензиат": "Лицензиата",
+        "Заёмщик": "Заёмщика",
+        "Займодавец": "Займодавца",
+        "Агент": "Агента",
+        "Принципал": "Принципала",
+        "Поручитель": "Поручителя",
+        "Перевозчик": "Перевозчика",
+    }
+
+    for role, genitive in expected.items():
+        assert edition_label(role, "Стороны 2") == f"Редакция {genitive}"
+        assert agreed_text_for_party(role) == f"Редакция {genitive}"
+
+
+def test_edition_label_has_safe_empty_and_unknown_fallbacks():
+    assert edition_label("", "Стороны 1") == "Редакция Стороны 1"
+    assert edition_label("  ", "Стороны 2") == "Редакция Стороны 2"
+    assert edition_label("Контрагент", "Стороны 2") == "Редакция стороны «Контрагент»"
 
 
 def test_clause_with_table_emits_table_cell_change_flag_and_renders_cells():

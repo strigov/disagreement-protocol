@@ -32,18 +32,29 @@ _GENITIVE_RULES = {
     "Поставщик": "Поставщика",
     "Покупатель": "Покупателя",
     "Подрядчик": "Подрядчика",
+    "Продавец": "Продавца",
+    "Лицензиар": "Лицензиара",
+    "Лицензиат": "Лицензиата",
+    "Заёмщик": "Заёмщика",
+    "Займодавец": "Займодавца",
+    "Агент": "Агента",
+    "Принципал": "Принципала",
+    "Поручитель": "Поручителя",
+    "Перевозчик": "Перевозчика",
 }
 
 
-def _genitive(role: str) -> str:
-    return _GENITIVE_RULES.get(role, role)
+def edition_label(role: str, empty_fallback: str) -> str:
+    normalized_role = (role or "").strip()
+    if not normalized_role:
+        return f"Редакция {empty_fallback}"
+    if normalized_role in _GENITIVE_RULES:
+        return f"Редакция {_GENITIVE_RULES[normalized_role]}"
+    return f"Редакция стороны «{normalized_role}»"
 
 
 def agreed_text_for_party(role: str) -> str:
-    role = (role or "").strip()
-    if not role:
-        return "Редакция Стороны 2"
-    return f"Редакция {_genitive(role)}"
+    return edition_label(role, "Стороны 2")
 
 
 class ProtocolRowBuilder:

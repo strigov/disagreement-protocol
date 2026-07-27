@@ -65,6 +65,7 @@ def get_analysis(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Analy
     return AnalysisOut(
         id=doc.id,
         status=doc.status.value,
+        error_message=doc.error_message,
         contract_name=doc.contract_name,
         preflight_metrics=PreflightMetrics(**doc.preflight_metrics) if doc.preflight_metrics else None,
         preflight_diagnostics=[PreflightDiagnostic(**diagnostic) for diagnostic in diagnostics_raw],

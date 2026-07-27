@@ -96,6 +96,17 @@ def test_sample_03_counts_format_only_without_changed_clause():
     )
 
 
+def test_sample_03_extracts_two_parties_with_full_names_and_roles():
+    result = run_pipeline(_sample_bytes("03_complex_styles_annex_tables.docx"))
+
+    parties_by_role = {party.role: party for party in result["parties"]}
+    assert set(parties_by_role) == {"Арендодатель", "Арендатор"}
+    assert parties_by_role["Арендодатель"].name == (
+        "Общество с ограниченной ответственностью «Гамма»"
+    )
+    assert parties_by_role["Арендатор"].name == "Акционерное общество «Дельта»"
+
+
 def test_sample_03_table_replacement_uses_original_and_accepted_columns():
     result = run_pipeline(_sample_bytes("03_complex_styles_annex_tables.docx"))
     rows = ProtocolRowBuilder().build(

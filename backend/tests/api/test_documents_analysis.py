@@ -111,8 +111,27 @@ async def test_get_analysis_returns_parties(parsed_doc, override_db):
     assert response.status_code == 200
     body = response.json()
     assert body["contract_name"] == "t"
+    assert body["error_message"] is None
     assert len(body["parties"]) == 1
     assert body["parties"][0]["role"] == "Арендодатель"
+
+
+@pytest.mark.asyncio
+async def test_get_analysis_returns_saved_error_message_for_failed_document(
+    parsed_doc,
+    override_db,
+):
+    doc, _, _ = parsed_doc
+    doc.status = DocumentStatus.FAILED
+    doc.error_message = "Ошибка разбора OOXML: недопустимый XML-узел"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get(f"/api/documents/{doc.id}/analysis")
+
+    assert response.status_code == 200
+    assert response.json()["error_message"] == (
+        "Ошибка разбора OOXML: недопустимый XML-узел"
+    )
 
 
 @pytest.mark.asyncio
@@ -179,6 +198,7 @@ async def test_patch_parties_sets_drafting_and_status(parsed_doc, override_db):
     body = response.json()
     assert body["drafting_party_id"] == str(party.id)
     assert body["status"] == "parties_confirmed"
+    assert body["error_message"] is None
     assert len(body["parties"]) == 2
     assert db.committed is True
 
