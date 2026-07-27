@@ -39,9 +39,24 @@ export interface PreflightDiagnostic {
   block_id: string | null;
 }
 
+// Mirrors the backend `DocumentStatus` enum. `uploaded` and `parsing` are the
+// only statuses the backend still works on; the rest are terminal for the UI.
+export type DocumentStatus =
+  | "uploaded"
+  | "parsing"
+  | "parsed"
+  | "parties_confirmed"
+  | "built"
+  | "exported"
+  | "failed";
+
 export interface AnalysisOut {
   id: UUID;
-  status: string;
+  status: DocumentStatus;
+  // Reason a `failed` document could not be processed. Always present in the
+  // response (null when there is no error), but callers must tolerate an older
+  // backend that omits the field entirely.
+  error_message: string | null;
   contract_name: string | null;
   preflight_metrics: PreflightMetrics | null;
   preflight_diagnostics: PreflightDiagnostic[];

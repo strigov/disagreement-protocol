@@ -2,8 +2,54 @@ import type { AnalysisOut, Protocol, ProtocolRow, UUID } from "./types";
 
 const BASE = "";
 
+// Turns a failed Response into the sentence we put in front of the user.
+// FastAPI answers with {"detail": "..."} for handled errors and with a
+// {"detail": [{"msg": ...}]} list for request-validation errors; anything else
+// (a proxy, a crash page) arrives as plain text and keeps its diagnostic
+// "<status> <body>" shape. The body is read exactly once — a Response stream
+// cannot be consumed twice.
+async function apiErrorMessage(resp: Response): Promise<string> {
+  let body = "";
+  try {
+    body = (await resp.text()).trim();
+  } catch {
+    return `Ошибка запроса (HTTP ${resp.status})`;
+  }
+  if (!body) return `Ошибка запроса (HTTP ${resp.status})`;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return `${resp.status} ${body}`;
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return `${resp.status} ${body}`;
+  }
+
+  const detail = (parsed as { detail?: unknown }).detail;
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((item) =>
+        typeof item === "object" && item !== null
+          ? (item as { msg?: unknown }).msg
+          : undefined,
+      )
+      .filter((msg): msg is string => typeof msg === "string" && msg.trim() !== "")
+      .map((msg) => msg.trim());
+    if (messages.length > 0) return messages.join("; ");
+  }
+  // Never dump a raw JSON body at the user.
+  return `Ошибка запроса (HTTP ${resp.status})`;
+}
+
+async function throwApiError(resp: Response): Promise<never> {
+  throw new Error(await apiErrorMessage(resp));
+}
+
 async function jsonOrThrow<T>(resp: Response): Promise<T> {
-  if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
+  if (!resp.ok) await throwApiError(resp);
   return resp.json() as Promise<T>;
 }
 
@@ -62,7 +108,7 @@ export const api = {
     const resp = await fetch(`${BASE}/api/protocols/${protocolId}/rows/${rowId}`, {
       method: "DELETE",
     });
-    if (!resp.ok) throw new Error(`${resp.status} ${await resp.text()}`);
+    if (!resp.ok) await throwApiError(resp);
   },
 
   swapParties: async (protocolId: UUID): Promise<Protocol> =>
@@ -76,7 +122,7 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ filename }),
     });
-    if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+    if (!r.ok) await throwApiError(r);
     return r.blob();
   },
 };

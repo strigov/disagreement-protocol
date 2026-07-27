@@ -14,6 +14,11 @@ beforeEach(() => {
   push.mockClear();
 });
 
+const docx = (name: string) =>
+  new File(["docx"], name, {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
+
 test("uploads selected docx and navigates to analysis page", async () => {
   const seenFiles: string[] = [];
   server.use(
@@ -60,4 +65,58 @@ test("uploads dropped docx and shows server errors", async () => {
 
   expect(await screen.findByText("500 upload failed")).toBeInTheDocument();
   expect(push).not.toHaveBeenCalled();
+});
+
+test("shows only the FastAPI detail for a rejected upload", async () => {
+  server.use(
+    http.post("/api/documents", () =>
+      HttpResponse.json(
+        { detail: "Поддерживаются только файлы .docx без макросов" },
+        { status: 400 },
+      ),
+    ),
+  );
+
+  render(<FileUpload />);
+  await userEvent.upload(screen.getByLabelText("Выбрать файл"), docx("macros.docx"));
+
+  expect(
+    await screen.findByText("Поддерживаются только файлы .docx без макросов"),
+  ).toBeInTheDocument();
+  // The raw JSON envelope and the bare status code never reach the user.
+  expect(screen.queryByText(/detail/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/400/)).not.toBeInTheDocument();
+  expect(push).not.toHaveBeenCalled();
+});
+
+test("joins FastAPI validation messages into one line", async () => {
+  server.use(
+    http.post("/api/documents", () =>
+      HttpResponse.json(
+        {
+          detail: [
+            { loc: ["body", "file"], msg: "Field required", type: "missing" },
+            { loc: ["body", "file"], msg: "Файл пустой", type: "value_error" },
+          ],
+        },
+        { status: 422 },
+      ),
+    ),
+  );
+
+  render(<FileUpload />);
+  await userEvent.upload(screen.getByLabelText("Выбрать файл"), docx("empty.docx"));
+
+  expect(await screen.findByText("Field required; Файл пустой")).toBeInTheDocument();
+});
+
+test("falls back to a Russian message when the error body is empty", async () => {
+  server.use(
+    http.post("/api/documents", () => new HttpResponse(null, { status: 502 })),
+  );
+
+  render(<FileUpload />);
+  await userEvent.upload(screen.getByLabelText("Выбрать файл"), docx("gateway.docx"));
+
+  expect(await screen.findByText("Ошибка запроса (HTTP 502)")).toBeInTheDocument();
 });
