@@ -1,7 +1,7 @@
 ---
 slug: disprot-defect-fixes
 created: 2026-07-26
-status: in-progress
+status: done
 phases:
   - id: Ф1
     scope: "Безопасный разбор OOXML и реальные format-only правки"
