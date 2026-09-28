@@ -112,6 +112,7 @@ def test_process_document_persists_paragraphs_and_real_confidence(monkeypatch):
     assert first_clause.paragraphs_json == [
         {
             "block_id": "p_0001",
+            "block_index": 0,
             "text_runs": "1. Первый пункт",
             "num_id": None,
             "ilvl": None,

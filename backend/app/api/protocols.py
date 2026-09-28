@@ -14,20 +14,16 @@ from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.models.party import Party
 from app.models.protocol import Protocol, ProtocolRow
-from app.processing.types import (
-    Clause as ClauseDC,
-    EnrichedParagraph,
-    RawParagraph,
-    RawTable,
-    RawTableCell,
-    RawTableRow,
-    RevisionRecord,
-    Run,
-)
-from app.processing.validation_engine import ValidationEngine
+from app.processing.ooxml_parser import OOXMLParser
 from app.schemas.protocol import ExportRequest, ProtocolOut, ProtocolRowCreate, ProtocolRowOut, ProtocolRowPatch
 from app.services.exporter import ProtocolExporter
-from app.services.protocol_generator import BuildContext, ProtocolRowBuilder, agreed_text_for_party
+from app.services.protocol_generator import BuildContext, ProtocolRowBuilder
+from app.services.clause_codec import restore_clause
+from app.services.storage import FileStorage
+from app.services.protocol_state import (
+    agreed_was_edited, normalize_order, refresh_for_protocol, refresh_validation,
+    source_keys, synchronize_agreed,
+)
 
 router = APIRouter(prefix="/api", tags=["protocols"])
 
@@ -92,62 +88,6 @@ def _ascii_fallback(name: str) -> str:
     return result or "protocol"
 
 
-def _restore_table_cell(table_block_id: str, row_index: int, cell_index: int, cell_data) -> RawTableCell:
-    if isinstance(cell_data, str):
-        original_text = cell_data
-        accepted_text = cell_data
-        revisions = ()
-    else:
-        original_text = cell_data.get("original_text")
-        accepted_text = cell_data.get("accepted_text")
-        revisions = tuple(
-            RevisionRecord(
-                type=revision.get("type", ""),
-                text=revision.get("text", ""),
-                author=revision.get("author", ""),
-            )
-            for revision in (cell_data.get("revisions") or [])
-        )
-    paragraph_text = accepted_text if accepted_text is not None else original_text or ""
-    return RawTableCell(
-        paragraphs=(
-            RawParagraph(
-                block_id=f"{table_block_id}_p_{row_index:04d}_{cell_index:04d}",
-                runs=(Run(text=paragraph_text),),
-                num_id=None,
-                ilvl=None,
-                style_id=None,
-                is_in_table=True,
-            ),
-        ),
-        original_text=original_text,
-        accepted_text=accepted_text,
-        revisions=revisions,
-    )
-
-
-def _restore_paragraph(paragraph_data: dict, fallback_confidence: float) -> EnrichedParagraph:
-    return EnrichedParagraph(
-        block_id=paragraph_data.get("block_id", ""),
-        text_runs=paragraph_data.get("text_runs", paragraph_data.get("accepted_text", "")),
-        num_id=paragraph_data.get("num_id"),
-        ilvl=paragraph_data.get("ilvl"),
-        original_text=paragraph_data.get("original_text", ""),
-        accepted_text=paragraph_data.get("accepted_text", ""),
-        revisions=tuple(
-            RevisionRecord(
-                type=revision.get("type", ""),
-                text=revision.get("text", ""),
-                author=revision.get("author", ""),
-            )
-            for revision in (paragraph_data.get("revisions") or [])
-        ),
-        rendered_number=paragraph_data.get("rendered_number"),
-        numbering_confidence=paragraph_data.get("numbering_confidence", fallback_confidence),
-        numbering_level=paragraph_data.get("numbering_level"),
-    )
-
-
 def _serialize_row(row: ProtocolRow) -> ProtocolRowOut:
     return ProtocolRowOut(
         id=row.id,
@@ -187,55 +127,28 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
         .order_by(ClauseModel.sort_order)
         .all()
     )
-    clauses_dc: list[ClauseDC] = []
-    for cm in clause_models:
-        clause = ClauseDC(clause_key=cm.clause_key, label=cm.label, level=cm.level, parent_key=cm.parent_key)
-        clause.flags = set(cm.flags or [])
-        paragraphs_payload = getattr(cm, "paragraphs_json", None)
-        if paragraphs_payload is not None:
-            clause.paragraphs.extend(
-                _restore_paragraph(paragraph_data, cm.confidence or 0.0)
-                for paragraph_data in paragraphs_payload
-            )
+    clauses_dc = [restore_clause(cm) for cm in clause_models]
+    if any("SOURCE_ORDER_UNAVAILABLE" in clause.flags for clause in clauses_dc):
+        try:
+            raw = OOXMLParser().parse(FileStorage().get(doc.storage_key))
+        except (OSError, ValueError):
+            # Keep the explicit legacy warning if the original file is unavailable.
+            pass
         else:
-            clause.paragraphs.append(
-                EnrichedParagraph(
-                    block_id=cm.clause_key,
-                    text_runs=cm.accepted_text,
-                    num_id=None,
-                    ilvl=None,
-                    original_text=cm.original_text,
-                    accepted_text=cm.accepted_text,
-                    revisions=tuple(
-                        RevisionRecord(
-                            type=r.get("type", ""),
-                            text=r.get("text", ""),
-                            author=r.get("author", ""),
-                        )
-                        for r in (cm.revisions or [])
-                    ),
-                    rendered_number=None,
-                    numbering_confidence=cm.confidence or 0.0,
-                    numbering_level=None,
-                ),
-            )
-        for table in cm.tables_json or []:
-            rows_dc: list[RawTableRow] = []
-            for row_index, row_cells in enumerate(table.get("rows", [])):
-                cells = tuple(
-                    _restore_table_cell(table["block_id"], row_index, cell_index, cell_data)
-                    for cell_index, cell_data in enumerate(row_cells)
-                )
-                rows_dc.append(RawTableRow(cells=cells))
-            clause.tables.append(
-                RawTable(
-                    block_id=table["block_id"],
-                    block_index=table.get("block_index", 0),
-                    rows=tuple(rows_dc),
-                    has_revisions=bool(table.get("has_revisions", False)),
-                ),
-            )
-        clauses_dc.append(clause)
+            order = {block.block_id: block.block_index for block in raw.blocks}
+            for model in clause_models:
+                if model.paragraphs_json is not None:
+                    model.paragraphs_json = [
+                        {**p, "block_index": p["block_index"] if p.get("block_index") is not None
+                         else order.get(p.get("block_id"))}
+                        for p in model.paragraphs_json
+                    ]
+                model.tables_json = [
+                    {**table, "block_index": table["block_index"] if table.get("block_index") is not None
+                     else order.get(table.get("block_id"))}
+                    for table in (model.tables_json or [])
+                ]
+            clauses_dc = [restore_clause(cm) for cm in clause_models]
 
     changed = [
         clause
@@ -266,6 +179,8 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
             party_2_text=built_row.party_2_text,
             agreed_text=built_row.agreed_text,
             source_clause_key=built_row.source_clause_key,
+            source_clause_keys=[built_row.source_clause_key] if built_row.source_clause_key else [],
+            agreed_text_edited=False,
             confidence=built_row.confidence,
             flags=built_row.flags,
             user_edited=False,
@@ -277,27 +192,7 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
     for built_row, protocol_row in zip(built, persisted_rows):
         built_row.row_id = str(protocol_row.id)
 
-    from app.processing.types import ResolverDiagnostic
-
-    diagnostics_raw = ((doc.metadata_json or {}).get("preflight_diagnostics") or [])
-    resolver_diagnostics = [
-        ResolverDiagnostic(
-            level=diagnostic.get("level", "warning"),
-            component=diagnostic.get("component", ""),
-            code=diagnostic.get("code", "MAPPING_MISMATCH"),
-            message=diagnostic.get("message", ""),
-            block_id=diagnostic.get("block_id"),
-        )
-        for diagnostic in diagnostics_raw
-    ]
-    report = ValidationEngine().validate(built, clauses_dc, resolver_diagnostics)
-    doc.validation_report = {
-        "textual_revisions_total": report.textual_revisions_total,
-        "format_only_revisions": report.format_only_revisions,
-        "covered_revisions": report.covered_revisions,
-        "numbering_confidence_mean": report.numbering_confidence_mean,
-        "warnings": report.warnings,
-    }
+    refresh_validation(db, doc, persisted_rows, clauses_dc)
     doc.status = DocumentStatus.BUILT
     db.commit()
 
@@ -337,14 +232,25 @@ def patch_row(
         if target is None:
             raise HTTPException(409, "No neighbouring row to merge with")
 
-        for column in ("party_1_text", "party_2_text", "agreed_text"):
-            existing = getattr(target, column) or ""
-            extra = getattr(row, column) or ""
-            setattr(target, column, f"{existing}\n{extra}".strip("\n"))
+        first, second = (target, row) if payload.merge_with == "previous" else (row, target)
+        origins = list(dict.fromkeys([*source_keys(first), *source_keys(second)]))
+        agreed_edited = agreed_was_edited(first) or agreed_was_edited(second)
+        for column in ("party_1_text", "party_2_text", "agreed_text", "point_label"):
+            left, right = getattr(first, column) or "", getattr(second, column) or ""
+            separator = ", " if column == "point_label" else "\n"
+            value = separator.join(part for part in (left, right) if part)
+            if column == "agreed_text" and left == right:
+                value = left
+            setattr(target, column, value)
+        target.source_clause_keys = origins
+        target.source_clause_key = origins[0] if origins else None
+        target.agreed_text_edited = agreed_edited
+        target.confidence = min(first.confidence, second.confidence)
         target.user_edited = True
-        if "USER_EDITED" not in (target.flags or []):
-            target.flags = [*list(target.flags or []), "USER_EDITED"]
+        target.flags = sorted({*(target.flags or []), *(row.flags or []), "USER_EDITED"})
         db.delete(row)
+        normalize_order([sibling for sibling in siblings if sibling.id != row.id])
+        refresh_for_protocol(db, protocol_id)
         db.commit()
         return _serialize_row(target)
 
@@ -352,9 +258,12 @@ def patch_row(
         value = getattr(payload, column)
         if value is not None:
             setattr(row, column, value)
+            if column == "agreed_text":
+                row.agreed_text_edited = True
     row.user_edited = True
     if "USER_EDITED" not in (row.flags or []):
         row.flags = [*list(row.flags or []), "USER_EDITED"]
+    refresh_for_protocol(db, protocol_id)
     db.commit()
     return _serialize_row(row)
 
@@ -394,6 +303,7 @@ def export_protocol(
         }
         for row in rows
     ]
+    refresh_validation(db, doc, rows)
     data = ProtocolExporter().export(payload_rows, drafting.role, counterparty.role, doc.contract_name)
     name = _sanitize_filename(payload.filename)
     ascii_name = _ascii_fallback(name) + ".docx"
@@ -428,6 +338,7 @@ def add_row(
     )
     insert_at = payload.sort_order if payload.sort_order is not None else len(existing)
     insert_at = max(0, min(insert_at, len(existing)))
+    normalize_order(existing)
     for row in existing:
         if row.sort_order >= insert_at:
             row.sort_order += 1
@@ -440,11 +351,14 @@ def add_row(
         party_2_text="",
         agreed_text="",
         source_clause_key=None,
+        source_clause_keys=[],
+        agreed_text_edited=True,
         confidence=1.0,
         flags=["MANUALLY_ADDED"],
         user_edited=True,
     )
     db.add(new_row)
+    refresh_for_protocol(db, protocol_id)
     db.commit()
     return _serialize_row(new_row)
 
@@ -459,15 +373,15 @@ def delete_row(
     if row is None or row.protocol_id != protocol_id:
         raise HTTPException(404, "Row not found")
 
-    deleted_order = row.sort_order
     db.delete(row)
     rest = (
         db.query(ProtocolRow)
-        .filter(ProtocolRow.protocol_id == protocol_id, ProtocolRow.sort_order > deleted_order)
+        .filter(ProtocolRow.protocol_id == protocol_id)
+        .order_by(ProtocolRow.sort_order)
         .all()
     )
-    for rest_row in rest:
-        rest_row.sort_order -= 1
+    normalize_order([rest_row for rest_row in rest if rest_row.id != row_id])
+    refresh_for_protocol(db, protocol_id)
     db.commit()
     return Response(status_code=204)
 
@@ -539,17 +453,17 @@ def swap_parties(
     if old_drafting is None or other is None:
         raise HTTPException(409, "Drafting party not set")
 
-    new_agreed = agreed_text_for_party(other.role)
     rows = (
         db.query(ProtocolRow)
         .filter(ProtocolRow.protocol_id == protocol_id)
         .order_by(ProtocolRow.sort_order)
         .all()
     )
-    for row in rows:
-        if not row.user_edited:
-            row.agreed_text = new_agreed
+    synchronize_agreed(rows, other.role)
     doc.drafting_party_id = other.id
+    if doc.status == DocumentStatus.EXPORTED:
+        doc.status = DocumentStatus.BUILT
+    refresh_validation(db, doc, rows)
     db.commit()
     return ProtocolOut(
         id=protocol.id,

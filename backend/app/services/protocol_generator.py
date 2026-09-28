@@ -22,6 +22,7 @@ class BuiltRow:
     confidence: float
     flags: list[str] = field(default_factory=list)
     row_id: str | None = None
+    source_clause_keys: list[str] = field(default_factory=list)
 
 
 _GENITIVE_RULES = {
@@ -68,25 +69,23 @@ class ProtocolRowBuilder:
                 rows.append(self._standalone_table_row(clause, agreed))
                 continue
 
-            original = "\n".join(paragraph.original_text for paragraph in clause.paragraphs)
-            accepted = "\n".join(paragraph.accepted_text for paragraph in clause.paragraphs)
+            original = render_clause(clause, "original")
+            accepted = render_clause(clause, "accepted")
             flags = set(clause.flags)
 
             if clause.tables:
                 if any(table.has_revisions for table in clause.tables):
                     flags.add("TABLE_CELL_CHANGE")
-                original_table_text = self._render_tables(clause, "original")
-                accepted_table_text = self._render_tables(clause, "accepted")
-                if original_table_text:
-                    original = f"{original}\n{original_table_text}" if original else original_table_text
-                if accepted_table_text:
-                    accepted = f"{accepted}\n{accepted_table_text}" if accepted else accepted_table_text
 
             if "NEW_CLAUSE" in clause.flags:
-                new_clause_counter += 1
+                if clause.paragraphs and clause.paragraphs[0].rendered_number:
+                    point_label = clause.label
+                else:
+                    new_clause_counter += 1
+                    point_label = f"Новый пункт {new_clause_counter}"
                 rows.append(
                     BuiltRow(
-                        point_label=f"Новый пункт {new_clause_counter}",
+                        point_label=point_label,
                         party_1_text="—",
                         party_2_text=accepted,
                         agreed_text=agreed,
@@ -143,11 +142,7 @@ class ProtocolRowBuilder:
         )
 
     def _render_tables(self, clause: Clause, version: Literal["original", "accepted"]) -> str:
-        parts: list[str] = []
-        for table in clause.tables:
-            for row in table.rows:
-                parts.append(" | ".join(cell.text(version) for cell in row.cells))
-        return "\n".join(parts)
+        return "\n".join(table.cell_text(version) for table in clause.tables)
 
     def _confidence(self, clause: Clause) -> float:
         if "MULTI_PARAGRAPH" in clause.flags:
@@ -155,3 +150,14 @@ class ProtocolRowBuilder:
         if "LOW_NUMBERING_CONFIDENCE" in clause.flags:
             return 0.6
         return 0.95
+
+
+def render_clause(clause: Clause, version: Literal["original", "accepted"]) -> str:
+    """Render mixed paragraphs/tables in source order, retaining a legacy fallback."""
+    blocks = [*clause.paragraphs, *clause.tables]
+    if all(block.block_index is not None for block in blocks):
+        blocks.sort(key=lambda block: block.block_index)
+    return "\n".join(
+        block.cell_text(version) if hasattr(block, "cell_text") else getattr(block, f"{version}_text")
+        for block in blocks
+    ).strip("\n")

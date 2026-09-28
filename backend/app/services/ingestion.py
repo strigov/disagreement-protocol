@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import io
 import re
-import zipfile
+from dataclasses import replace
 from typing import Any
 
+from app.processing.docx_package import DocxPackage, MAX_FILE_BYTES, PackageError
 from app.processing.changed_clause_detector import ChangedClauseDetector
 from app.processing.clause_segmenter import ClauseSegmenter
 from app.processing.numbering_resolver import NumberingResolver
@@ -19,7 +19,7 @@ from app.processing.types import (
 )
 from app.services.party_extractor import PartyExtractor
 
-MAX_BYTES = 25 * 1024 * 1024
+MAX_BYTES = MAX_FILE_BYTES
 
 
 class IngestError(Exception):
@@ -35,14 +35,10 @@ def validate_upload(filename: str, data: bytes) -> None:
     if len(data) > MAX_BYTES:
         raise IngestError(413, "Размер файла превышает 25 MB")
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            names = set(zf.namelist())
-    except zipfile.BadZipFile as exc:
-        raise IngestError(400, "Файл повреждён или не является документом Word") from exc
-    if "word/document.xml" not in names:
-        raise IngestError(400, "В архиве отсутствует word/document.xml — это не Word-документ")
-    if "word/vbaProject.bin" in names:
-        raise IngestError(415, "Документ содержит макросы (vbaProject.bin) — не поддерживается")
+        with DocxPackage(data):
+            pass
+    except PackageError as exc:
+        raise IngestError(exc.http_status, str(exc)) from exc
 
 
 def derive_contract_name(filename: str) -> str | None:
@@ -55,15 +51,15 @@ def derive_contract_name(filename: str) -> str | None:
     return name or None
 
 
-def _resolve_table(table: RawTable, revision_map: dict) -> RawTable:
+def _resolve_table(table: RawTable, revision_map: dict, package: DocxPackage) -> RawTable:
     rows: list[RawTableRow] = []
-    for row in table.rows:
+    for row in package.checked(table.rows):
         cells: list[RawTableCell] = []
-        for cell in row.cells:
+        for cell in package.checked(row.cells):
             original_parts: list[str] = []
             accepted_parts: list[str] = []
-            revisions = []
-            for paragraph in cell.paragraphs:
+            revisions = list(cell.revisions)
+            for paragraph in package.checked(cell.paragraphs):
                 revision_data = revision_map.get(paragraph.block_id)
                 if revision_data is None:
                     original_parts.append(paragraph.text())
@@ -73,20 +69,15 @@ def _resolve_table(table: RawTable, revision_map: dict) -> RawTable:
                 accepted_parts.append(revision_data.accepted_text)
                 revisions.extend(revision_data.revisions)
             cells.append(
-                RawTableCell(
-                    paragraphs=cell.paragraphs,
+                replace(
+                    cell,
                     original_text=" ".join(original_parts).strip(),
                     accepted_text=" ".join(accepted_parts).strip(),
                     revisions=tuple(revisions),
                 ),
             )
-        rows.append(RawTableRow(cells=tuple(cells)))
-    return RawTable(
-        block_id=table.block_id,
-        block_index=table.block_index,
-        rows=tuple(rows),
-        has_revisions=table.has_revisions,
-    )
+        rows.append(replace(row, cells=tuple(cells)))
+    return replace(table, rows=tuple(rows))
 
 
 def _iter_clause_revisions(clauses):
@@ -95,18 +86,24 @@ def _iter_clause_revisions(clauses):
             yield from paragraph.revisions
         for table in clause.tables:
             for row in table.rows:
+                yield from row.revisions
                 for cell in row.cells:
                     yield from cell.revisions
 
 
 def run_pipeline(data: bytes) -> dict[str, Any]:
+    with DocxPackage(data) as package:
+        return _run_pipeline(package)
+
+
+def _run_pipeline(data: DocxPackage) -> dict[str, Any]:
     parser = OOXMLParser()
     raw = parser.parse(data)
     revisions, revision_diags = RevisionResolver().resolve(data, raw)
     numbering, numbering_diags = NumberingResolver().resolve(data, raw, revisions)
 
     segmenter_blocks: list[EnrichedParagraph | RawTable] = []
-    for block in raw.blocks:
+    for block in data.checked(raw.blocks):
         if isinstance(block, RawParagraph):
             rd = revisions.get(block.block_id)
             nd = numbering.get(block.block_id)
@@ -121,23 +118,24 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
                 rendered_number=nd.rendered_number if nd else None,
                 numbering_confidence=nd.confidence if nd else 0.0,
                 numbering_level=nd.numbering_level if nd else None,
+                block_index=block.block_index,
             )
             segmenter_blocks.append(enriched)
         elif isinstance(block, RawTable):
-            segmenter_blocks.append(_resolve_table(block, revisions))
+            segmenter_blocks.append(_resolve_table(block, revisions, data))
 
-    clauses = ClauseSegmenter().segment(segmenter_blocks)
-    changed = ChangedClauseDetector().detect(clauses)
+    clauses = ClauseSegmenter().segment(segmenter_blocks, check_budget=data.check_budget)
+    changed = ChangedClauseDetector().detect(clauses, check_budget=data.check_budget)
     preamble_text = ""
-    for clause in clauses:
+    for clause in data.checked(clauses):
         if clause.label == "Преамбула":
             preamble_text = "\n".join(paragraph.accepted_text for paragraph in clause.paragraphs)
             break
     if not preamble_text and clauses:
         preamble_text = "\n".join(paragraph.accepted_text for paragraph in clauses[0].paragraphs)
 
-    parties = PartyExtractor().extract(preamble_text)
-    all_revisions = list(_iter_clause_revisions(clauses))
+    parties = PartyExtractor().extract(preamble_text, check_budget=data.check_budget)
+    all_revisions = list(data.checked(_iter_clause_revisions(clauses)))
     diagnostics = [
         {
             "level": diagnostic.level,
@@ -149,7 +147,7 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
         for diagnostic in (*revision_diags, *numbering_diags)
     ]
     paragraph_count = sum(len(clause.paragraphs) for clause in clauses)
-    return {
+    result = {
         "clauses": clauses,
         "changed_clauses": changed,
         "parties": parties,
@@ -175,3 +173,5 @@ def run_pipeline(data: bytes) -> dict[str, Any]:
         },
         "preflight_diagnostics": diagnostics,
     }
+    data.check_budget()
+    return result

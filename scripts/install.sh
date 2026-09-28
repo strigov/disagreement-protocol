@@ -56,7 +56,7 @@ if [[ "$SKIP_BACKEND" -eq 0 ]]; then
   log "Installing backend dependencies with Python 3.12"
   (
     cd "$ROOT_DIR/backend"
-    uv sync --python 3.12 --extra dev
+    uv sync --frozen --python 3.12 --extra dev
     uv run python - <<'PY'
 import sys
 
@@ -69,7 +69,7 @@ fi
 if [[ "$SKIP_FRONTEND" -eq 0 ]]; then
   need_command npm
   log "Installing frontend dependencies"
-  (cd "$ROOT_DIR/frontend" && npm install)
+  (cd "$ROOT_DIR/frontend" && npm ci)
 fi
 
 log "Install complete"

@@ -9,6 +9,8 @@ from app.main import app
 from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.models.party import Party
+from app.models.protocol import Protocol, ProtocolRow
+from app.models.clause import Clause
 
 
 class FakeQuery:
@@ -16,6 +18,9 @@ class FakeQuery:
         self.rows = rows
 
     def filter(self, *args, **kwargs):
+        return self
+
+    def order_by(self, *args):
         return self
 
     def all(self) -> list[Party]:
@@ -34,8 +39,10 @@ class FakeDb:
         return None
 
     def query(self, model):
-        assert model is Party
-        return FakeQuery(self.parties)
+        if model is Party:
+            return FakeQuery(self.parties)
+        assert model in (Protocol, ProtocolRow, Clause)
+        return FakeQuery([])
 
     def add(self, obj) -> None:
         if isinstance(obj, Party):
@@ -105,7 +112,7 @@ def override_db(parsed_doc: tuple[Document, Party, FakeDb]) -> Iterator[FakeDb]:
 @pytest.mark.asyncio
 async def test_get_analysis_returns_parties(parsed_doc, override_db):
     doc, _, _ = parsed_doc
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.get(f"/api/documents/{doc.id}/analysis")
 
     assert response.status_code == 200
@@ -125,7 +132,7 @@ async def test_get_analysis_returns_saved_error_message_for_failed_document(
     doc.status = DocumentStatus.FAILED
     doc.error_message = "Ошибка разбора OOXML: недопустимый XML-узел"
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.get(f"/api/documents/{doc.id}/analysis")
 
     assert response.status_code == 200
@@ -137,7 +144,7 @@ async def test_get_analysis_returns_saved_error_message_for_failed_document(
 @pytest.mark.asyncio
 async def test_get_analysis_includes_preflight_diagnostics(parsed_doc, override_db):
     doc, _, _ = parsed_doc
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.get(f"/api/documents/{doc.id}/analysis")
 
     assert response.status_code == 200
@@ -169,7 +176,7 @@ async def test_get_analysis_includes_validation_report_warnings(parsed_doc, over
         ],
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.get(f"/api/documents/{doc.id}/analysis")
 
     assert response.status_code == 200
@@ -182,7 +189,7 @@ async def test_get_analysis_includes_validation_report_warnings(parsed_doc, over
 @pytest.mark.asyncio
 async def test_patch_parties_sets_drafting_and_status(parsed_doc, override_db):
     doc, party, db = parsed_doc
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={
@@ -210,7 +217,7 @@ async def test_patch_parties_creates_new_party_when_payload_item_has_no_id_even_
 ):
     doc, party, db = parsed_doc
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={
@@ -243,7 +250,7 @@ async def test_patch_parties_clears_drafting_party_when_payload_null(parsed_doc,
     db.parties.append(party_b)
     doc.drafting_party_id = party_a.id
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={
@@ -269,7 +276,7 @@ async def test_patch_parties_rejects_duplicate_existing_party_ids_without_db_cha
     original_party_state = (party.id, party.name, party.role, party.confidence)
     original_parties = list(db.parties)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={
@@ -296,7 +303,7 @@ async def test_patch_parties_rejects_empty_parties_without_db_changes(parsed_doc
     original_status = doc.status
     original_parties = list(db.parties)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={"parties": [], "drafting_party_id": None},
@@ -317,7 +324,7 @@ async def test_patch_parties_rejects_unknown_drafting_party_without_db_changes(p
     original_drafting_party_id = doc.drafting_party_id
     original_parties = list(db.parties)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={
@@ -352,7 +359,7 @@ async def test_patch_parties_rejects_drafting_party_id_when_payload_only_matches
     original_drafting_party_id = doc.drafting_party_id
     original_parties = list(db.parties)
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={
@@ -380,7 +387,7 @@ async def test_patch_parties_rejects_payload_id_for_new_drafting_party_without_d
     original_parties = list(db.parties)
     client_supplied_new_party_id = uuid.uuid4()
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.patch(
             f"/api/documents/{doc.id}/parties",
             json={

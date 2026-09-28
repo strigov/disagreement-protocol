@@ -1,11 +1,15 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { ArrowRight, ArrowLeft, LoaderCircle } from "lucide-react";
+import { WorkspaceShell } from "@/components/WorkspaceShell";
+import { AnalysisSummary } from "@/components/AnalysisSummary";
 import { api } from "@/lib/api";
 import type { AnalysisOut } from "@/lib/types";
 import { PartySelector, newPartyUid, type PartyDraft } from "@/components/PartySelector";
 
-export default function PartiesPage({ params }: { params: { id: string } }) {
+export default function PartiesPage() {
+  const params = useParams<{ id: string }>();
   const [analysis, setAnalysis] = useState<AnalysisOut | null>(null);
   const [parties, setParties] = useState<PartyDraft[]>([]);
   // We track the drafting selection by the client-side _uid because newly-
@@ -13,6 +17,7 @@ export default function PartiesPage({ params }: { params: { id: string } }) {
   // UUID after the PATCH response returns.
   const [draftingUid, setDraftingUid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -27,7 +32,7 @@ export default function PartiesPage({ params }: { params: { id: string } }) {
           role: p.role,
           _uid: newPartyUid(),
         }));
-        setParties(drafts);
+        setParties(drafts.length ? drafts : [0, 1].map(() => ({ id: null, name: "", role: "", _uid: newPartyUid() })));
         const draftingDraft = drafts.find((d) => d.id === a.drafting_party_id) ?? null;
         setDraftingUid(draftingDraft?._uid ?? null);
       })
@@ -35,8 +40,10 @@ export default function PartiesPage({ params }: { params: { id: string } }) {
   }, [params.id]);
 
   const submit = async () => {
-    if (!draftingUid) return;
+    if (!draftingUid || submitting.current || parties.length !== 2 || parties.some((p) => !p.name.trim() || !p.role.trim())) return;
+    submitting.current = true;
     setBusy(true);
+    setError(null);
     try {
       const payload = parties.map((p) => ({ id: p.id, name: p.name, role: p.role }));
       // First-pass PATCH: drafting may be a brand-new (id=null) party,
@@ -73,35 +80,33 @@ export default function PartiesPage({ params }: { params: { id: string } }) {
     } catch (e) {
       setError((e as Error).message);
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   };
 
-  if (error) return <main className="p-8 text-red-600">{error}</main>;
-  if (!analysis) return <main className="p-8">Загружаем…</main>;
+  if (!analysis) return <WorkspaceShell step={2} documentId={params.id}>
+    {error ? <div className="notice notice-error" role="alert">{error}</div> : <div className="loading-state"><LoaderCircle className="spinner mx-auto mb-4" size={24} /><p>Загружаем…</p></div>}
+  </WorkspaceShell>;
 
   return (
-    <main className="max-w-3xl mx-auto py-12 px-4 space-y-6">
-      <h1 className="text-2xl font-semibold">Стороны договора</h1>
-      <PartySelector
-        parties={parties}
-        draftingUid={draftingUid}
-        onChange={setParties}
-        onDraftingChange={setDraftingUid}
-      />
-      <p className="text-sm text-gray-600">
-        Отметьте сторону, от чьего имени составляется протокол (drafting party).
-      </p>
-      <button
-        disabled={!draftingUid || busy || parties.length !== 2}
-        onClick={submit}
-        className="px-4 py-2 bg-blue-600 text-white rounded disabled:bg-gray-300"
-      >
-        Построить протокол
-      </button>
-      {parties.length !== 2 && (
-        <p className="text-amber-700 text-sm">MVP поддерживает ровно две стороны.</p>
-      )}
-    </main>
+    <WorkspaceShell step={2} documentId={params.id}>
+      <div className="eyebrow">Договор загружен</div>
+      <h1 className="page-title">Стороны договора</h1>
+      {analysis.contract_name && <p className="document-name">{analysis.contract_name}</p>}
+      <p className="page-description">Проверьте названия и роли. Отметьте вашу сторону — от её имени будет составлен протокол разногласий.</p>
+      <AnalysisSummary analysis={analysis} />
+      {analysis.parties.length === 0 && <p className="notice mt-5">Стороны не удалось определить автоматически. Введите их названия и роли из договора.</p>}
+      <PartySelector parties={parties} draftingUid={draftingUid} onChange={setParties} onDraftingChange={setDraftingUid} disabled={busy} />
+      {parties.length !== 2 && <p className="notice mt-5">Для протокола нужны две стороны. Добавьте недостающую или удалите лишнюю.</p>}
+      {error && <p className="notice notice-error mt-5" role="alert">{error}</p>}
+      <div className="page-actions">
+        <button className="btn btn-quiet" disabled={busy} onClick={() => router.push("/")}><ArrowLeft size={14} /> Другой документ</button>
+        <button disabled={!draftingUid || busy || parties.length !== 2 || parties.some((p) => !p.name.trim() || !p.role.trim())}
+          onClick={submit} className="btn btn-primary">
+          {busy ? <><LoaderCircle size={15} className="spinner" /> Подготавливаем…</> : <>Построить протокол <ArrowRight size={15} /></>}
+        </button>
+      </div>
+    </WorkspaceShell>
   );
 }

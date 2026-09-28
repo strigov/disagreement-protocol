@@ -49,6 +49,7 @@ class RawParagraph:
     ilvl: int | None
     style_id: str | None
     is_in_table: bool = False
+    block_index: int | None = None
 
     def text(self) -> str:
         return "".join(r.text for r in self.runs)
@@ -60,10 +61,14 @@ class RawTableCell:
     original_text: str | None = None
     accepted_text: str | None = None
     revisions: tuple["RevisionRecord", ...] = ()
+    exists_in_original: bool = True
+    exists_in_accepted: bool = True
 
     def text(self, version: Literal["original", "accepted"] = "accepted") -> str:
         if version not in ("original", "accepted"):
             raise ValueError(f"Неизвестная версия ячейки: {version}")
+        if not getattr(self, f"exists_in_{version}"):
+            return ""
         resolved_text = self.original_text if version == "original" else self.accepted_text
         if resolved_text is not None:
             return resolved_text
@@ -73,12 +78,15 @@ class RawTableCell:
 @dataclass(frozen=True)
 class RawTableRow:
     cells: tuple[RawTableCell, ...]
+    exists_in_original: bool = True
+    exists_in_accepted: bool = True
+    revisions: tuple["RevisionRecord", ...] = ()
 
 
 @dataclass(frozen=True)
 class RawTable:
     block_id: str
-    block_index: int
+    block_index: int | None
     rows: tuple[RawTableRow, ...]
     has_revisions: bool
 
@@ -87,8 +95,12 @@ class RawTable:
         if version not in ("original", "accepted"):
             raise ValueError(f"Неизвестная версия таблицы: {version}")
         return "\n".join(
-            " | ".join(c.text(version) for c in r.cells)
+            " | ".join(
+                c.text(version) for c in r.cells
+                if getattr(c, f"exists_in_{version}")
+            )
             for r in self.rows
+            if getattr(r, f"exists_in_{version}")
         )
 
 
@@ -115,6 +127,7 @@ class RevisionData:
     original_ilvl: int | None = None
     original_numpr_present: bool = False
     original_ppr_change: bool = False
+    exists_in_accepted: bool = True
 
 
 @dataclass(frozen=True)
@@ -137,6 +150,7 @@ class EnrichedParagraph:
     rendered_number: str | None
     numbering_confidence: float
     numbering_level: int | None = None
+    block_index: int | None = None
 
 
 @dataclass

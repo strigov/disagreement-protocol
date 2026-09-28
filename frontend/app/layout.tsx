@@ -6,7 +6,7 @@ export const metadata = { title: "Протокол разногласий" };
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ru">
-      <body className="min-h-screen bg-gray-50 text-gray-900">{children}</body>
+      <body><a className="skip-link" href="#main-content">К содержимому</a>{children}</body>
     </html>
   );
 }

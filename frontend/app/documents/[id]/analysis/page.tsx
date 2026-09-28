@@ -1,6 +1,9 @@
 "use client";
+import Link from "next/link";
+import { LoaderCircle, ArrowRight } from "lucide-react";
+import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import type { AnalysisOut, DocumentStatus } from "@/lib/types";
 
@@ -31,10 +34,11 @@ const POLL_INTERVAL_MS = 1000;
 
 type PageError = { title: string; detail: string };
 
-export default function AnalysisPage({ params }: { params: { id: string } }) {
+export default function AnalysisPage() {
+  const params = useParams<{ id: string }>();
   const [analysis, setAnalysis] = useState<AnalysisOut | null>(null);
   const [error, setError] = useState<PageError | null>(null);
-  const router = useRouter();
+  const { push } = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -58,6 +62,10 @@ export default function AnalysisPage({ params }: { params: { id: string } }) {
           });
           return;
         }
+        if (mode === "report") {
+          push(`/documents/${params.id}/${a.status === "built" || a.status === "exported" ? "protocol" : "parties"}`);
+          return;
+        }
         if (mode === undefined) {
           setError({
             title: "Неизвестный статус документа",
@@ -79,89 +87,26 @@ export default function AnalysisPage({ params }: { params: { id: string } }) {
       cancelled = true;
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [params.id]);
+  }, [params.id, push]);
 
-  if (error) {
-    return (
-      <main className="mx-auto max-w-3xl space-y-4 px-4 py-12">
-        <div role="alert" className="space-y-2 rounded border border-red-200 bg-red-50 p-4">
-          <h1 className="text-2xl font-semibold tracking-tight text-red-900">{error.title}</h1>
-          <p className="text-red-800">{error.detail}</p>
-        </div>
-        <a
-          href="/"
-          className="inline-block text-sm text-blue-700 underline underline-offset-2 hover:text-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-        >
-          Загрузить другой документ
-        </a>
-      </main>
-    );
-  }
-
-  if (!analysis || modeOf(analysis.status) === "poll") {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-12" aria-busy="true">
-        <p role="status" aria-live="polite" className="text-gray-600">
-          Анализируем документ…
-        </p>
-      </main>
-    );
-  }
-
-  const m = analysis.preflight_metrics;
-  const diagnostics = analysis.preflight_diagnostics ?? [];
+  if (error) return (
+    <WorkspaceShell documentId={params.id}>
+      <div role="alert" className="notice notice-error">
+        <h1 className="text-xl font-semibold mb-3">{error.title}</h1>
+        <p>{error.detail}</p>
+      </div>
+      <Link href="/" className="btn btn-secondary mt-6">Загрузить другой документ</Link>
+    </WorkspaceShell>
+  );
+  const isPending = !analysis || modeOf(analysis.status) === "poll";
   return (
-    <main className="max-w-3xl mx-auto py-12 px-4 space-y-6">
-      <h1 className="text-2xl font-semibold">Предварительный отчёт</h1>
-      {m && (
-        <div className="bg-white border rounded p-4 space-y-1">
-          <div>Правок всего: {m.revisions_total}</div>
-          <div>Format-only: {m.format_only_count}</div>
-          <div>Параграфов с нумерацией: {m.paragraphs_with_numbering}</div>
-          <div>Уверенность нумерации: {(m.numbering_confidence_mean * 100).toFixed(0)}%</div>
-        </div>
-      )}
-      {diagnostics.length > 0 && (
-        <div className="bg-white border rounded p-4 space-y-2">
-          <div className="font-medium">Диагностика</div>
-          <ul className="space-y-1 text-sm">
-            {diagnostics.map((d, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span
-                  aria-hidden
-                  className={
-                    d.level === "error"
-                      ? "inline-block mt-0.5 text-red-600"
-                      : "inline-block mt-0.5 text-yellow-600"
-                  }
-                  title={d.level}
-                >
-                  {d.level === "error" ? "⛔" : "⚠"}
-                </span>
-                <span>
-                  <span className="font-mono text-gray-700">{d.component}</span>
-                  {": "}
-                  <span>{d.message}</span>
-                  {d.block_id && (
-                    <span className="text-gray-500"> ({d.block_id})</span>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {!m && diagnostics.length === 0 && (
-        <p className="text-gray-600">
-          Метрики анализа для этого документа недоступны. Перейдите к сторонам договора.
-        </p>
-      )}
-      <button
-        onClick={() => router.push(`/documents/${params.id}/parties`)}
-        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
-      >
-        Дальше
-      </button>
-    </main>
+    <WorkspaceShell documentId={params.id}>
+      <div className="loading-state" aria-busy={isPending}>
+        {isPending && <LoaderCircle className="spinner mx-auto mb-6 text-blue-600" size={30} />}
+        <h1 className="page-title" role="status" aria-live="polite">{isPending ? "Анализируем документ…" : "Документ готов к проверке"}</h1>
+        <p className="page-description mx-auto">{isPending ? "Находим изменения, сопоставляем пункты и определяем стороны договора." : "Переходим в рабочее пространство договора."}</p>
+        {!isPending && <button className="btn btn-primary mt-6" onClick={() => push(`/documents/${params.id}/${analysis?.status === "built" || analysis?.status === "exported" ? "protocol" : "parties"}`)}>Продолжить <ArrowRight size={14} /></button>}
+      </div>
+    </WorkspaceShell>
   );
 }

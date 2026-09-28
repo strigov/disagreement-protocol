@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Sequence, Union
+from typing import Callable, Sequence, Union
 
 from app.processing.types import Clause, EnrichedParagraph, RawTable
 
@@ -21,7 +21,8 @@ _ANNEX_RE = re.compile(r"^\s*приложение\s*[№#]?\s*\d+", re.IGNORECAS
 
 
 class ClauseSegmenter:
-    def segment(self, blocks: Sequence[Block]) -> list[Clause]:
+    def segment(self, blocks: Sequence[Block], check_budget: Callable[[], None] = lambda: None) -> list[Clause]:
+        check_budget()
         clauses: list[Clause] = []
         stack: list[Clause] = []
         preamble: Clause | None = None
@@ -33,11 +34,13 @@ class ClauseSegmenter:
         all_paras = [b for b in blocks if isinstance(b, EnrichedParagraph)]
         window = all_paras[-30:] if len(all_paras) >= 30 else all_paras
         for p in window:
+            check_budget()
             if _REQUISITES_RE.match(p.text_runs.strip()):
                 last_requisites_idx = blocks.index(p)
                 break
 
         for current_block_index, block in enumerate(blocks):
+            check_budget()
             if current_requisites_clause is not None:
                 if isinstance(block, RawTable):
                     current_requisites_clause.tables.append(block)
@@ -143,8 +146,10 @@ class ClauseSegmenter:
             stack.append(new_clause)
 
         for clause in clauses:
+            check_budget()
             if len(clause.paragraphs) > 1:
                 clause.flags.add("MULTI_PARAGRAPH")
+        check_budget()
         return clauses
 
     def _level_of(self, paragraph: EnrichedParagraph) -> int | None:

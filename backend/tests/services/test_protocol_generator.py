@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from app.processing.types import (
@@ -62,7 +64,7 @@ def test_basic_row_maps_columns():
     assert row.agreed_text == "Редакция Арендатора"
 
 
-def test_new_clause_uses_dash_in_counterparty_and_label_with_counter():
+def test_new_clause_uses_dash_in_counterparty_and_detected_number():
     clause = _make_clause(
         "1.",
         "",
@@ -79,7 +81,22 @@ def test_new_clause_uses_dash_in_counterparty_and_label_with_counter():
 
     assert rows[0].party_1_text == "—"
     assert rows[0].party_2_text == "Совсем новый пункт"
-    assert rows[0].point_label == "Новый пункт 1"
+    assert rows[0].point_label == "1."
+
+
+def test_only_unnumbered_new_clauses_use_fallback_counter():
+    clauses = [
+        _make_clause("Без номера", "", "Новый текст", flags={"NEW_CLAUSE"}),
+        _make_clause("6.6.", "", "6.6. Новый пункт", flags={"NEW_CLAUSE"}),
+        _make_clause("Ещё без номера", "", "Другой текст", flags={"NEW_CLAUSE"}),
+    ]
+    for clause in (clauses[0], clauses[2]):
+        clause.paragraphs[0] = replace(clause.paragraphs[0], rendered_number=None)
+
+    rows = ProtocolRowBuilder().build(clauses, BuildContext("Покупатель", "Поставщик"))
+
+    assert [row.point_label for row in rows] == ["Новый пункт 1", "6.6.", "Новый пункт 2"]
+    assert all(row.party_1_text == "—" and "NEW_CLAUSE" in row.flags for row in rows)
 
 
 def test_deleted_clause_uses_exclude_in_drafting():

@@ -3,15 +3,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.request_guard import ALLOWED_ORIGINS, LocalRequestGuard
+
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    # Local tool: no migration engine, the schema is created on startup.
-    import app.models  # noqa: F401
-    from app.db.base import Base
-    from app.db.session import engine
+    from app.db.migrations import upgrade_schema
+    from app.db.session import SessionLocal, engine
+    from app.services.processing import recover_interrupted_documents
 
-    Base.metadata.create_all(bind=engine)
+    upgrade_schema(engine)
+    with SessionLocal() as db:
+        recover_interrupted_documents(db)
     yield
 
 
@@ -19,10 +22,11 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Disagreement Protocol", version="0.1.0", lifespan=_lifespan)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],
+        allow_origins=sorted(ALLOWED_ORIGINS),
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(LocalRequestGuard)
 
     @app.get("/health")
     def health() -> dict:

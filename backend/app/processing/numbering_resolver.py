@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import re
-import zipfile
 from dataclasses import dataclass, field
-from io import BytesIO
 
-from lxml import etree
+from app.processing.docx_package import DocxPackage, PackageError
 
 from app.processing.types import (
     NumberingData,
@@ -81,6 +79,7 @@ class _Level:
     num_fmt: str
     lvl_text: str
     start: int
+    restart: int | None = None  # one-based ancestor; 0 = never, None = previous level
 
 
 @dataclass(frozen=True)
@@ -99,39 +98,53 @@ class _NumberingModel:
     # style_id -> (based_on_style_id | None, (num_id, ilvl) | None)
     styles: dict[str, tuple[str | None, tuple[int, int] | None]] = field(default_factory=dict)
 
+    diagnostics: list[ResolverDiagnostic] = field(default_factory=list)
+
     @classmethod
-    def load(cls, data: bytes) -> "_NumberingModel":
+    def load(cls, data: bytes | DocxPackage) -> "_NumberingModel":
+        if not isinstance(data, DocxPackage):
+            with DocxPackage(data) as package:
+                return cls.load(package)
         model = cls()
-        try:
-            with zipfile.ZipFile(BytesIO(data)) as z:
-                names = set(z.namelist())
-                if "word/numbering.xml" in names:
-                    info = z.getinfo("word/numbering.xml")
-                    if info.file_size <= _MAX_NUMBERING_XML_BYTES:
-                        with z.open(info) as f:
-                            model._load_numbering(etree.parse(f).getroot())
-                if "word/styles.xml" in names:
-                    info = z.getinfo("word/styles.xml")
-                    if info.file_size <= _MAX_STYLES_XML_BYTES:
-                        with z.open(info) as f:
-                            model._load_styles(etree.parse(f).getroot())
-        except Exception:
-            return cls()
+        data.check_budget()
+        for name, limit, loader in (
+            ("word/numbering.xml", _MAX_NUMBERING_XML_BYTES, model._load_numbering),
+            ("word/styles.xml", _MAX_STYLES_XML_BYTES, model._load_styles),
+        ):
+            info = data.entries.get(name)
+            if info is None:
+                continue
+            if info.file_size > limit:
+                model.diagnostics.append(ResolverDiagnostic(
+                    "warning", "numbering", "OPTIONAL_PART_TOO_LARGE",
+                    f"{name} пропущен: превышен лимит 5 MB. Проверьте нумерацию вручную.",
+                ))
+                continue
+            root = data.xml(name, limit)
+            try:
+                loader(root, data)
+            except PackageError:
+                raise
+            except (ValueError, TypeError) as exc:
+                model.diagnostics.append(ResolverDiagnostic(
+                    "warning", "numbering", "INVALID_NUMBERING_DEFINITION",
+                    f"Некорректное определение в {name}: {str(exc)[:120]}",
+                ))
         return model
 
-    def _load_numbering(self, root) -> None:
-        for abstract in root.iter(_w("abstractNum")):
+    def _load_numbering(self, root, package: DocxPackage) -> None:
+        for abstract in package.checked(root.iter(_w("abstractNum"))):
             raw_id = abstract.get(_w("abstractNumId"))
             if raw_id is None:
                 continue
             levels: dict[int, _Level] = {}
-            for lvl in abstract.findall(_w("lvl")):
+            for lvl in package.checked(abstract.findall(_w("lvl"))):
                 parsed = self._parse_level(lvl)
                 if parsed is not None:
                     levels[parsed[0]] = parsed[1]
             self.abstracts[int(raw_id)] = levels
 
-        for num in root.iter(_w("num")):
+        for num in package.checked(root.iter(_w("num"))):
             raw_num_id = num.get(_w("numId"))
             abstract_ref = num.find(_w("abstractNumId"))
             if raw_num_id is None or abstract_ref is None:
@@ -141,7 +154,7 @@ class _NumberingModel:
                 continue
             start_overrides: dict[int, int] = {}
             level_overrides: dict[int, _Level] = {}
-            for override in num.findall(_w("lvlOverride")):
+            for override in package.checked(num.findall(_w("lvlOverride"))):
                 raw_ilvl = override.get(_w("ilvl"))
                 if raw_ilvl is None:
                     continue
@@ -175,6 +188,11 @@ class _NumberingModel:
         num_fmt_el = lvl.find(_w("numFmt"))
         lvl_text_el = lvl.find(_w("lvlText"))
         start_el = lvl.find(_w("start"))
+        restart_el = lvl.find(_w("lvlRestart"))
+        restart = (
+            _bounded_int(restart_el.get(_w("val")), 0, ilvl)
+            if restart_el is not None else None
+        )
         num_fmt = num_fmt_el.get(_w("val")) if num_fmt_el is not None else "decimal"
         lvl_text = lvl_text_el.get(_w("val")) if lvl_text_el is not None else ""
         start = (
@@ -182,10 +200,10 @@ class _NumberingModel:
             if start_el is not None
             else None
         )
-        return ilvl, _Level(num_fmt or "decimal", lvl_text or "", start or 1)
+        return ilvl, _Level(num_fmt or "decimal", lvl_text or "", start or 1, restart)
 
-    def _load_styles(self, root) -> None:
-        for style in root.iter(_w("style")):
+    def _load_styles(self, root, package: DocxPackage) -> None:
+        for style in package.checked(root.iter(_w("style"))):
             style_id = style.get(_w("styleId"))
             if style_id is None:
                 continue
@@ -239,6 +257,9 @@ class _NumberingModel:
 class NumberingResolver:
     """Resolve a rendered_number string for each top-level paragraph.
 
+    Existing/deleted paragraphs retain their original number. Insertions
+    use the accepted version, replayed with independent counters/overrides.
+
     Strategy, in priority order:
     1. "native" — replay Word's numbering model: numbering.xml
        (abstractNum / lvlText / numFmt / start / lvlOverride) plus
@@ -252,26 +273,32 @@ class NumberingResolver:
 
     Known simplifications (rare in contracts, flagged by confidence
     instead of being modelled): numbered paragraphs inside table cells do
-    not advance counters, and w:lvlRestart is not honoured.
+    not advance counters. lvlRestart (including 0) is honoured.
     """
 
     def resolve(
         self,
-        data: bytes,
+        data: bytes | DocxPackage,
         raw_doc: RawDocument,
         revision_map: dict[str, RevisionData],
     ) -> NumberingResolveResult:
+        if not isinstance(data, DocxPackage):
+            with DocxPackage(data) as package:
+                return self.resolve(package, raw_doc, revision_map)
+        data.check_budget()
         para_blocks = [b for b in raw_doc.blocks if isinstance(b, RawParagraph)]
         model = _NumberingModel.load(data)
         out: dict[str, NumberingData] = {}
-        diags: list[ResolverDiagnostic] = []
+        diags: list[ResolverDiagnostic] = list(model.diagnostics)
         # abstract_id -> {ilvl: current counter value}
         counters: dict[int, dict[int, int]] = {}
         # (num_id, ilvl) pairs that already applied their startOverride
         applied_overrides: set[tuple[int, int]] = set()
+        accepted_counters: dict[int, dict[int, int]] = {}
+        accepted_overrides: set[tuple[int, int]] = set()
         rendered_chars = 0
 
-        for p in para_blocks:
+        for p in data.checked(para_blocks):
             revision = revision_map.get(p.block_id)
             num_id, ilvl = self._effective_numpr(p, model, revision)
             if num_id is not None and num_id != 0 and num_id not in model.nums:
@@ -284,6 +311,18 @@ class NumberingResolver:
                 ))
 
             exists_in_original = revision.exists_in_original if revision is not None else True
+            exists_in_accepted = revision.exists_in_accepted if revision is not None else True
+            accepted_number = None
+            if exists_in_accepted:
+                accepted_num_id, accepted_ilvl = self._effective_numpr(p, model)
+                if self._native_level(model, accepted_num_id, accepted_ilvl) is not None:
+                    # Advance every surviving paragraph, but only render insertions.
+                    # Both versions share one output budget.
+                    accepted_number, rendered_chars = self._advance_and_render(
+                        model, accepted_counters, accepted_overrides,
+                        accepted_num_id, accepted_ilvl, rendered_chars,
+                        render=not exists_in_original,
+                    )
             numbering_text = (
                 revision.original_text
                 if exists_in_original and revision is not None
@@ -305,7 +344,7 @@ class NumberingResolver:
                         rendered_chars,
                     )
                 else:
-                    rendered = None
+                    rendered = accepted_number
                 if rendered is not None:
                     confidence = 0.95
                     typed = REGEX_NUMBER.match(numbering_text)
@@ -340,14 +379,6 @@ class NumberingResolver:
                         numbering_level=structural_level,
                     )
                     continue
-                if not exists_in_original:
-                    out[p.block_id] = NumberingData(
-                        rendered_number=None,
-                        confidence=0.95,
-                        source="native",
-                        numbering_level=structural_level,
-                    )
-                    continue
                 out[p.block_id] = NumberingData(
                     rendered_number=None,
                     confidence=0.95,
@@ -362,8 +393,7 @@ class NumberingResolver:
                 typed_length = typed_end - typed.start(1)
                 number_length = typed_length + (0 if numbering_text[typed_end - 1] == "." else 1)
                 capture_allowed = number_length <= _MAX_RENDERED_NUMBER_CHARS and (
-                    not exists_in_original
-                    or number_length <= _MAX_DOCUMENT_RENDERED_CHARS - rendered_chars
+                    number_length <= _MAX_DOCUMENT_RENDERED_CHARS - rendered_chars
                 )
                 if capture_allowed:
                     num = typed.group(1)
@@ -374,12 +404,12 @@ class NumberingResolver:
                     num = None
                     numbering_level = None
                 out[p.block_id] = NumberingData(
-                    rendered_number=None if not exists_in_original else num,
+                    rendered_number=num,
                     confidence=0.7,
                     source="regex",
                     numbering_level=numbering_level,
                 )
-                if exists_in_original and num is not None:
+                if num is not None:
                     rendered_chars += len(num)
                 continue
 
@@ -390,7 +420,7 @@ class NumberingResolver:
                 numbering_level=structural_level,
             )
 
-        for p in para_blocks:
+        for p in data.checked(para_blocks):
             nd = out[p.block_id]
             if (
                 nd.source == "native"
@@ -462,6 +492,8 @@ class NumberingResolver:
         num_id: int,
         ilvl: int,
         rendered_chars: int,
+        *,
+        render: bool = True,
     ) -> tuple[str | None, int]:
         num = model.nums.get(num_id)
         levels = model.effective_levels(num_id)
@@ -487,13 +519,21 @@ class NumberingResolver:
             c[ilvl] = _MAX_DERIVED_COUNTER + 1
             return None, rendered_chars
         c[ilvl] = counter
-        # A new item at this level restarts all deeper levels.
+        # OOXML lvlRestart names the ancestor whose actual use triggers a reset.
+        # In particular 0 must survive every ancestor, including implicit resets.
         for deeper in [lv for lv in c if lv > ilvl]:
-            del c[deeper]
+            deeper_level = levels.get(deeper)
+            restart = deeper_level.restart if deeper_level else None
+            trigger = deeper - 1 if restart is None else restart - 1
+            if ilvl == trigger:
+                del c[deeper]
         # lvlText may reference ancestor levels not seen yet (e.g. "%1.%2.").
         for ancestor in range(ilvl):
             if ancestor not in c and ancestor in levels:
                 c[ancestor] = levels[ancestor].start
+
+        if not render:
+            return None, rendered_chars
 
         remaining_chars = min(
             _MAX_RENDERED_NUMBER_CHARS,

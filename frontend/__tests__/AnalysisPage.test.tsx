@@ -1,14 +1,19 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import AnalysisPage from "@/app/documents/[id]/analysis/page";
+import { TestRoute, useTestParams } from "./route-context";
 import { server } from "@/src/mocks/server";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
+  useParams: () => useTestParams(),
 }));
+
+function RoutedPage({ params }: { params: { id: string } }) {
+  return <TestRoute id={params.id}><AnalysisPage /></TestRoute>;
+}
 
 beforeEach(() => {
   push.mockClear();
@@ -31,7 +36,7 @@ const baseAnalysis = {
   error_message: null,
 };
 
-test("shows loading state, then preflight metrics and diagnostics, navigates on Дальше", async () => {
+test("shows loading then goes directly to party confirmation", async () => {
   server.use(
     http.get("/api/documents/doc-1/analysis", () =>
       HttpResponse.json({
@@ -51,32 +56,24 @@ test("shows loading state, then preflight metrics and diagnostics, navigates on 
     ),
   );
 
-  render(<AnalysisPage params={{ id: "doc-1" }} />);
+  render(<RoutedPage params={{ id: "doc-1" }} />);
 
   expect(screen.getByText("Анализируем документ…")).toBeInTheDocument();
 
-  expect(await screen.findByText("Предварительный отчёт")).toBeInTheDocument();
-  expect(screen.getByText("Правок всего: 12")).toBeInTheDocument();
-  expect(screen.getByText("Format-only: 3")).toBeInTheDocument();
-  expect(screen.getByText("Уверенность нумерации: 82%")).toBeInTheDocument();
-  expect(screen.getByText("low confidence")).toBeInTheDocument();
-  expect(screen.getByText("broken xml")).toBeInTheDocument();
-
-  await userEvent.click(screen.getByRole("button", { name: "Дальше" }));
-  expect(push).toHaveBeenCalledWith("/documents/doc-1/parties");
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/doc-1/parties"));
+  expect(screen.queryByText("Анализируем документ…")).not.toBeInTheDocument();
 });
 
-test("loaded document without metrics or diagnostics states that explicitly", async () => {
+test("already built document returns to the existing protocol", async () => {
   server.use(
     http.get("/api/documents/doc-empty/analysis", () =>
       HttpResponse.json({ ...baseAnalysis, id: "doc-empty", status: "built" }),
     ),
   );
 
-  render(<AnalysisPage params={{ id: "doc-empty" }} />);
+  render(<RoutedPage params={{ id: "doc-empty" }} />);
 
-  expect(await screen.findByText(/Метрики анализа для этого документа недоступны/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Дальше" })).toBeInTheDocument();
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/doc-empty/protocol"));
 });
 
 // Every status that is not `uploaded`/`parsing` is terminal: the screen must
@@ -98,7 +95,7 @@ test("every terminal status settles the screen and stops polling", async () => {
   );
 
   const views = TERMINAL_STATUSES.map((status) =>
-    render(<AnalysisPage params={{ id: status }} />),
+    render(<RoutedPage params={{ id: status }} />),
   );
 
   await waitFor(() =>
@@ -112,7 +109,7 @@ test("every terminal status settles the screen and stops polling", async () => {
   views.forEach((view, i) => {
     const scope = within(view.container);
     if (REPORT_STATUSES.includes(TERMINAL_STATUSES[i])) {
-      expect(scope.getByRole("heading", { name: "Предварительный отчёт" })).toBeInTheDocument();
+      expect(scope.getByRole("status")).toBeInTheDocument();
     } else {
       expect(scope.getByRole("alert")).toBeInTheDocument();
     }
@@ -141,7 +138,7 @@ test("polls while the backend is still working and stops once it settles", async
   );
 
   const views = ["uploaded", "parsing"].map((id) =>
-    render(<AnalysisPage params={{ id }} />),
+    render(<RoutedPage params={{ id }} />),
   );
   views.forEach((view) =>
     expect(within(view.container).getByText("Анализируем документ…")).toBeInTheDocument(),
@@ -151,8 +148,8 @@ test("polls while the backend is still working and stops once it settles", async
     () =>
       views.forEach((view) =>
         expect(
-          within(view.container).getByRole("heading", { name: "Предварительный отчёт" }),
-        ).toBeInTheDocument(),
+          within(view.container).getByRole("status"),
+        ).toHaveTextContent("Документ готов к проверке"),
       ),
     { timeout: 3000 },
   );
@@ -175,7 +172,7 @@ test("failed document shows the reason reported by the backend", async () => {
     ),
   );
 
-  render(<AnalysisPage params={{ id: "doc-2" }} />);
+  render(<RoutedPage params={{ id: "doc-2" }} />);
 
   expect(
     await screen.findByText("Ошибка разбора OOXML: недопустимый XML-узел"),
@@ -207,7 +204,7 @@ test.each([
     http.get("/api/documents/doc-3/analysis", () => HttpResponse.json(payload)),
   );
 
-  render(<AnalysisPage params={{ id: "doc-3" }} />);
+  render(<RoutedPage params={{ id: "doc-3" }} />);
 
   expect(await screen.findByText("Ошибка обработки документа")).toBeInTheDocument();
 });
@@ -219,7 +216,7 @@ test("unknown status names itself instead of spinning", async () => {
     ),
   );
 
-  render(<AnalysisPage params={{ id: "doc-x" }} />);
+  render(<RoutedPage params={{ id: "doc-x" }} />);
 
   expect(await screen.findByText(/Сервер вернул статус «quarantined»/)).toBeInTheDocument();
   expect(screen.queryByText("Анализируем документ…")).not.toBeInTheDocument();
@@ -232,7 +229,7 @@ test("surfaces fetch error", async () => {
     ),
   );
 
-  render(<AnalysisPage params={{ id: "doc-4" }} />);
+  render(<RoutedPage params={{ id: "doc-4" }} />);
 
   await waitFor(() => expect(screen.getByText(/500 nope/)).toBeInTheDocument());
   expect(screen.getByRole("alert")).toHaveTextContent("Не удалось загрузить анализ");
@@ -245,7 +242,7 @@ test("shows only the FastAPI detail when the analysis request fails", async () =
     ),
   );
 
-  render(<AnalysisPage params={{ id: "doc-5" }} />);
+  render(<RoutedPage params={{ id: "doc-5" }} />);
 
   expect(await screen.findByText("Документ не найден")).toBeInTheDocument();
   expect(screen.queryByText(/detail/)).not.toBeInTheDocument();

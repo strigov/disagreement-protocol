@@ -25,7 +25,7 @@ afterAll(() => {
 });
 
 test("renders form with default filename and submit button", () => {
-  render(<ExportPage params={{ id: "doc1" }} />);
+  render(<ExportPage />);
   expect(screen.getByRole("heading", { name: "Экспорт" })).toBeInTheDocument();
   expect(screen.getByDisplayValue("Протокол разногласий")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
@@ -56,7 +56,7 @@ test("submits sanitized filename and triggers DOCX download", async () => {
         this.download;
     });
 
-  render(<ExportPage params={{ id: "doc1" }} />);
+  render(<ExportPage />);
 
   const input = screen.getByLabelText(/Имя файла/);
   await userEvent.clear(input);
@@ -64,7 +64,7 @@ test("submits sanitized filename and triggers DOCX download", async () => {
   await userEvent.type(input, "report/v1");
   await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
-  await screen.findByText("Файл сохранён.");
+  await screen.findByText("Скачивание началось. Проверьте загрузки браузера.");
 
   expect(received).toEqual({ filename: "reportv1" });
   expect(
@@ -75,7 +75,7 @@ test("submits sanitized filename and triggers DOCX download", async () => {
 });
 
 test("button disabled when filename sanitizes to empty", async () => {
-  render(<ExportPage params={{ id: "doc1" }} />);
+  render(<ExportPage />);
   const input = screen.getByLabelText(/Имя файла/);
   await userEvent.clear(input);
   await userEvent.type(input, "   ");
@@ -89,7 +89,7 @@ test("shows server error when export fails", async () => {
     ),
   );
 
-  render(<ExportPage params={{ id: "doc1" }} />);
+  render(<ExportPage />);
   await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
   await waitFor(() =>
@@ -114,7 +114,7 @@ test("shows busy state while export is in flight", async () => {
 
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
-  render(<ExportPage params={{ id: "doc1" }} />);
+  render(<ExportPage />);
   await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
   // Loading label visible, button disabled while in flight.
@@ -123,5 +123,5 @@ test("shows busy state while export is in flight", async () => {
   expect(screen.getByLabelText(/Имя файла/)).toBeDisabled();
 
   release();
-  await screen.findByText("Файл сохранён.");
+  await screen.findByText("Скачивание началось. Проверьте загрузки браузера.");
 });

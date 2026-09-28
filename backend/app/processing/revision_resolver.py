@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import zipfile
-from io import BytesIO
 
 from lxml import etree
+
+from app.processing.docx_package import DocxPackage
 
 from app.processing.types import (
     RawDocument,
@@ -22,19 +22,21 @@ RevisionResolveResult = tuple[dict[str, RevisionData], list[ResolverDiagnostic]]
 class RevisionResolver:
     """Build original_text / accepted_text for document and table paragraphs."""
 
-    def resolve(self, data: bytes, raw_doc: RawDocument) -> RevisionResolveResult:
-        with zipfile.ZipFile(BytesIO(data)) as z:
-            with z.open("word/document.xml") as f:
-                tree = etree.parse(f)
-        body = tree.getroot().find(f"{{{W_NS}}}body")
+    def resolve(self, data: bytes | DocxPackage, raw_doc: RawDocument) -> RevisionResolveResult:
+        if not isinstance(data, DocxPackage):
+            with DocxPackage(data) as package:
+                return self.resolve(package, raw_doc)
+        root = data.xml("word/document.xml")
+        body = root.find(f"{{{W_NS}}}body")
         out: dict[str, RevisionData] = {}
         diags: list[ResolverDiagnostic] = []
         if body is None:
             return out, diags
+        diags.extend(self._move_diagnostics(body, data))
 
-        body_blocks = list(self._iter_block_children(body))
+        body_blocks = list(self._iter_block_children(body, data))
         xml_index = 0
-        for raw_block in raw_doc.blocks:
+        for raw_block in data.checked(raw_doc.blocks):
             expected_tag = "p" if isinstance(raw_block, RawParagraph) else "tbl"
             xml_block = body_blocks[xml_index] if xml_index < len(body_blocks) else None
             if xml_block is not None and etree.QName(xml_block.tag).localname == expected_tag:
@@ -42,19 +44,47 @@ class RevisionResolver:
                 if isinstance(raw_block, RawParagraph):
                     self._store_paragraph_revision(
                         raw_block,
-                        self._paragraph_revision(xml_block),
+                        self._paragraph_revision(xml_block, data),
                         out,
                         diags,
                     )
                 else:
-                    self._resolve_table(raw_block, xml_block, out, diags)
+                    self._resolve_table(raw_block, xml_block, out, diags, data)
                 continue
 
             if isinstance(raw_block, RawParagraph):
                 self._store_paragraph_revision(raw_block, self._plain_revision(raw_block), out, diags)
             else:
-                self._resolve_table(raw_block, None, out, diags)
+                self._resolve_table(raw_block, None, out, diags, data)
+            diags.append(ResolverDiagnostic(
+                "warning", "revision", "MAPPING_MISMATCH",
+                "Блок исходного документа не сопоставлен с правками", raw_block.block_id,
+            ))
         return out, diags
+
+    @staticmethod
+    def _move_diagnostics(body, package: DocxPackage) -> list[ResolverDiagnostic]:
+        if not any(body.find(f".//{{{W_NS}}}{tag}") is not None for tag in ("moveFrom", "moveTo")):
+            return []
+        names = []
+        malformed = False
+        for kind in ("moveFrom", "moveTo"):
+            starts = list(package.checked(body.iter(f"{{{W_NS}}}{kind}RangeStart")))
+            ends = list(package.checked(body.iter(f"{{{W_NS}}}{kind}RangeEnd")))
+            start_ids = [e.get(f"{{{W_NS}}}id") for e in starts]
+            end_ids = [e.get(f"{{{W_NS}}}id") for e in ends]
+            group_names = [e.get(f"{{{W_NS}}}name") for e in starts]
+            malformed |= (not starts or None in start_ids or None in end_ids or None in group_names
+                          or len(set(start_ids)) != len(start_ids)
+                          or sorted(start_ids or []) != sorted(end_ids or []))
+            names.append(set(group_names))
+        if malformed or names[0] != names[1]:
+            return [ResolverDiagnostic(
+                "warning", "revision", "UNPAIRED_MOVE",
+                "Границы перемещения текста не образуют полную пару. Редакции восстановлены "
+                "по moveFrom/moveTo; проверьте перемещение вручную.",
+            )]
+        return []
 
     def _plain_revision(self, raw_p: RawParagraph) -> RevisionData:
         text = raw_p.text()
@@ -68,7 +98,11 @@ class RevisionResolver:
         diags: list[ResolverDiagnostic],
     ) -> None:
         out[raw_p.block_id] = revision_data
-        if revision_data.revisions and revision_data.original_text == revision_data.accepted_text:
+        if (
+            revision_data.revisions
+            and all(r.type == "FORMAT_ONLY" for r in revision_data.revisions)
+            and revision_data.original_text == revision_data.accepted_text
+        ):
             diags.append(
                 ResolverDiagnostic(
                     level="warning",
@@ -85,31 +119,32 @@ class RevisionResolver:
         tbl_elem,
         out: dict[str, RevisionData],
         diags: list[ResolverDiagnostic],
+        package: DocxPackage,
     ) -> None:
         xml_rows = tbl_elem.findall(f"{{{W_NS}}}tr") if tbl_elem is not None else []
-        for row_index, raw_row in enumerate(raw_table.rows):
+        for row_index, raw_row in package.checked(enumerate(raw_table.rows)):
             xml_row = xml_rows[row_index] if row_index < len(xml_rows) else None
             xml_cells = (
                 xml_row.findall(f"{{{W_NS}}}tc") if xml_row is not None else []
             )
-            for cell_index, raw_cell in enumerate(raw_row.cells):
+            for cell_index, raw_cell in package.checked(enumerate(raw_row.cells)):
                 xml_cell = xml_cells[cell_index] if cell_index < len(xml_cells) else None
                 xml_paragraphs = []
                 if xml_cell is not None:
                     xml_paragraphs = [
                         block
-                        for block in self._iter_block_children(xml_cell)
+                        for block in self._iter_block_children(xml_cell, package)
                         if etree.QName(block.tag).localname == "p"
                     ]
-                for paragraph_index, raw_p in enumerate(raw_cell.paragraphs):
+                for paragraph_index, raw_p in package.checked(enumerate(raw_cell.paragraphs)):
                     if paragraph_index < len(xml_paragraphs):
-                        revision_data = self._paragraph_revision(xml_paragraphs[paragraph_index])
+                        revision_data = self._paragraph_revision(xml_paragraphs[paragraph_index], package)
                     else:
                         revision_data = self._plain_revision(raw_p)
                     self._store_paragraph_revision(raw_p, revision_data, out, diags)
 
-    def _iter_block_children(self, elem):
-        for child in elem:
+    def _iter_block_children(self, elem, package: DocxPackage):
+        for child in package.checked(elem):
             if not isinstance(child.tag, str):
                 continue
             tag = etree.QName(child.tag).localname
@@ -118,28 +153,30 @@ class RevisionResolver:
             elif tag == "sdt":
                 content = child.find(f"{{{W_NS}}}sdtContent")
                 if content is not None:
-                    yield from self._iter_block_children(content)
+                    yield from self._iter_block_children(content, package)
 
-    def _paragraph_revision(self, p_elem) -> RevisionData:
+    def _paragraph_revision(self, p_elem, package: DocxPackage) -> RevisionData:
         original_parts: list[str] = []
         accepted_parts: list[str] = []
         revisions: list[RevisionRecord] = []
 
         def walk(elem, revision_stack: list[str]) -> None:
+            package.check_budget()
             if not isinstance(elem.tag, str):
                 return
             local = etree.QName(elem.tag).localname
-            if local in ("ins", "del"):
+            if local in ("ins", "del", "moveFrom", "moveTo"):
+                context = "del" if local in ("del", "moveFrom") else "ins"
                 is_top_level = not revision_stack
                 author = elem.get(f"{{{W_NS}}}author") or ""
                 original_start = len(original_parts)
                 accepted_start = len(accepted_parts)
-                revision_stack.append(local)
+                revision_stack.append(context)
                 for child in elem:
                     walk(child, revision_stack)
                 revision_stack.pop()
                 if is_top_level:
-                    if local == "ins":
+                    if context == "ins":
                         ins_text = "".join(accepted_parts[accepted_start:])
                         if ins_text:
                             revisions.append(
@@ -178,6 +215,8 @@ class RevisionResolver:
                     accepted_parts.append(elem.text)
                 elif top_context == "ins" and "del" not in nested_context:
                     accepted_parts.append(elem.text)
+                elif top_context == "del" and "ins" not in nested_context:
+                    original_parts.append(elem.text)
             elif (
                 local == "delText"
                 and elem.text
@@ -204,6 +243,17 @@ class RevisionResolver:
                 exists_in_original = not has_inserted_mark or has_deleted_mark
         else:
             exists_in_original = True
+
+        if accepted_text.strip():
+            exists_in_accepted = True
+        elif original_text.strip():
+            exists_in_accepted = False
+        else:
+            ppr = p_elem.find(f"{{{W_NS}}}pPr")
+            rpr = ppr.find(f"{{{W_NS}}}rPr") if ppr is not None else None
+            has_inserted_mark = rpr is not None and rpr.find(f"{{{W_NS}}}ins") is not None
+            has_deleted_mark = rpr is not None and rpr.find(f"{{{W_NS}}}del") is not None
+            exists_in_accepted = not has_deleted_mark or has_inserted_mark
 
         original_style_id = None
         original_num_id = None
@@ -250,7 +300,7 @@ class RevisionResolver:
 
         def run_text(run_elem) -> str:
             parts: list[str] = []
-            for node in run_elem.iter():
+            for node in package.checked(run_elem.iter()):
                 if not isinstance(node.tag, str):
                     continue
                 local = etree.QName(node.tag).localname
@@ -271,7 +321,7 @@ class RevisionResolver:
             return None
 
         run_text_cache: dict[object, str] = {}
-        for change_elem in p_elem.iter():
+        for change_elem in package.checked(p_elem.iter()):
             if not isinstance(change_elem.tag, str):
                 continue
             local = etree.QName(change_elem.tag).localname
@@ -301,6 +351,7 @@ class RevisionResolver:
             accepted_text=accepted_text,
             revisions=tuple(revisions),
             exists_in_original=exists_in_original,
+            exists_in_accepted=exists_in_accepted,
             original_style_id=original_style_id,
             original_num_id=original_num_id,
             original_ilvl=original_ilvl,

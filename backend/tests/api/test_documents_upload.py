@@ -10,7 +10,7 @@ from tests.fixtures.builders import build_simple_docx
 
 @pytest.mark.asyncio
 async def test_upload_rejects_non_docx_extension():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.post(
             "/api/documents",
             files={"file": ("a.txt", b"hi", "text/plain")},
@@ -21,7 +21,7 @@ async def test_upload_rejects_non_docx_extension():
 
 @pytest.mark.asyncio
 async def test_upload_rejects_corrupted_zip():
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         response = await client.post(
             "/api/documents",
             files={"file": ("a.docx", b"not-a-zip", "application/octet-stream")},
@@ -56,7 +56,7 @@ async def test_upload_rejects_oversized_file_without_side_effects(monkeypatch):
     monkeypatch.setattr("app.api.documents.process_document", fake_process)
     app.dependency_overrides[get_db] = override_get_db
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
             response = await client.post(
                 "/api/documents",
                 files={
@@ -101,7 +101,7 @@ async def test_upload_happy_path_creates_document(monkeypatch):
     monkeypatch.setattr("app.api.documents.process_document", fake_process)
     app.dependency_overrides[get_db] = override_get_db
     try:
-        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
             response = await client.post(
                 "/api/documents",
                 files={

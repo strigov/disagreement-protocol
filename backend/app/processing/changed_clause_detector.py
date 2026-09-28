@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+from typing import Callable
+
 from app.processing.types import Clause
 
 
 class ChangedClauseDetector:
-    def detect(self, clauses: list[Clause]) -> list[Clause]:
+    def detect(self, clauses: list[Clause], check_budget: Callable[[], None] = lambda: None) -> list[Clause]:
+        check_budget()
         out: list[Clause] = []
         for clause in clauses:
+            check_budget()
             textual = [
                 revision
                 for paragraph in clause.paragraphs
@@ -25,14 +29,17 @@ class ChangedClauseDetector:
                     for revision in paragraph.revisions
                     if revision.type in ("INS", "DEL")
                 ]
-                if all(paragraph.original_text.strip() == "" for paragraph in clause.paragraphs) and all(
+                if (all(paragraph.original_text.strip() == "" for paragraph in clause.paragraphs)
+                    and all(not table.cell_text("original").strip() for table in clause.tables)) and all(
                     revision_type == "INS" for revision_type in textual_types
                 ):
                     clause.flags.add("NEW_CLAUSE")
-                if all(paragraph.accepted_text.strip() == "" for paragraph in clause.paragraphs) and all(
+                if (all(paragraph.accepted_text.strip() == "" for paragraph in clause.paragraphs)
+                    and all(not table.cell_text("accepted").strip() for table in clause.tables)) and all(
                     revision_type == "DEL" for revision_type in textual_types
                 ):
                     clause.flags.add("DELETED_CLAUSE")
 
             out.append(clause)
+        check_budget()
         return out

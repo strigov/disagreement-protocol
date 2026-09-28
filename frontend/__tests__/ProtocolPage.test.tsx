@@ -100,7 +100,7 @@ test("first build: getAnalysis is called only AFTER buildProtocol resolves", asy
     }),
   );
 
-  render(<ProtocolPage params={{ id: "doc1" }} />);
+  render(<ProtocolPage />);
 
   // Loading state while build is still pending.
   expect(screen.getByText("Строим таблицу…")).toBeInTheDocument();
@@ -138,7 +138,7 @@ test("loads existing protocol without rebuilding", async () => {
     http.get("/api/documents/doc1/analysis", () => HttpResponse.json(BASE_ANALYSIS)),
   );
 
-  render(<ProtocolPage params={{ id: "doc1" }} />);
+  render(<ProtocolPage />);
   await screen.findByText("1.1");
   expect(buildCalled).toBe(false);
 });
@@ -152,7 +152,7 @@ test("loading state shown before protocol resolves", async () => {
     http.get("/api/documents/doc1/analysis", () => HttpResponse.json(BASE_ANALYSIS)),
   );
 
-  render(<ProtocolPage params={{ id: "doc1" }} />);
+  render(<ProtocolPage />);
   expect(screen.getByText("Строим таблицу…")).toBeInTheDocument();
   // Empty-rows state then renders.
   await screen.findByText(/В протоколе пока нет строк/);
@@ -166,14 +166,14 @@ test("surfaces error when build fails", async () => {
     ),
   );
 
-  render(<ProtocolPage params={{ id: "doc1" }} />);
+  render(<ProtocolPage />);
   await waitFor(() =>
     expect(screen.getByText("Не удалось загрузить протокол")).toBeInTheDocument(),
   );
   expect(screen.getByText(/500 oops/)).toBeInTheDocument();
 });
 
-test("export button navigates to export page", async () => {
+test("export opens a dialog without leaving the editor", async () => {
   server.use(
     http.get("/api/protocols", () =>
       HttpResponse.json([{ id: "p1", document_id: "doc1", rows: [] }]),
@@ -184,11 +184,12 @@ test("export button navigates to export page", async () => {
     http.get("/api/documents/doc1/analysis", () => HttpResponse.json(BASE_ANALYSIS)),
   );
 
-  render(<ProtocolPage params={{ id: "doc1" }} />);
+  render(<ProtocolPage />);
   await screen.findByText("1.1");
 
   await userEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
-  expect(push).toHaveBeenCalledWith("/documents/doc1/export");
+  expect(await screen.findByRole("dialog", { name: "Скачать протокол" })).toBeInTheDocument();
+  expect(push).not.toHaveBeenCalled();
 });
 
 // --- ProtocolTable in isolation -------------------------------------------------

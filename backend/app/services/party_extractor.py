@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Callable
 
 ENTITY_PREFIXES = (
     "Федеральное государственное унитарное предприятие",
@@ -91,9 +92,10 @@ def _is_unfinished_in_face_clause(
     return not role_matches or face_matches[-1].start() > role_matches[-1].start()
 
 
-def _entity_starts(preamble_text: str) -> list[int]:
+def _entity_starts(preamble_text: str, check_budget: Callable[[], None]) -> list[int]:
     starts: list[int] = []
     for match in ENTITY_START.finditer(preamble_text):
+        check_budget()
         candidate_start = match.start()
         previous_start = starts[-1] if starts else 0
         if _is_unfinished_in_face_clause(
@@ -106,8 +108,8 @@ def _entity_starts(preamble_text: str) -> list[int]:
     return starts
 
 
-def _entity_spans(preamble_text: str) -> list[str]:
-    starts = _entity_starts(preamble_text)
+def _entity_spans(preamble_text: str, check_budget: Callable[[], None]) -> list[str]:
+    starts = _entity_starts(preamble_text, check_budget)
     return [
         preamble_text[start : starts[index + 1] if index + 1 < len(starts) else len(preamble_text)]
         for index, start in enumerate(starts)
@@ -119,9 +121,11 @@ def _strip_quotes(value: str) -> str:
 
 
 class PartyExtractor:
-    def extract(self, preamble_text: str) -> list[ExtractedParty]:
+    def extract(self, preamble_text: str, check_budget: Callable[[], None] = lambda: None) -> list[ExtractedParty]:
+        check_budget()
         seen: dict[str, ExtractedParty] = {}
-        for span in _entity_spans(preamble_text):
+        for span in _entity_spans(preamble_text, check_budget):
+            check_budget()
             m = PATTERN_DALEE_QUOTED.search(span)
             if m:
                 name = m.group("name").strip()
@@ -133,4 +137,5 @@ class PartyExtractor:
                 name = m.group("name").strip()
                 role = m.group("role").strip()
                 seen.setdefault(role, ExtractedParty(name=name, role=role, confidence=0.85))
+        check_budget()
         return list(seen.values())

@@ -25,6 +25,7 @@ env/
 *.swp
 *.swo
 *~
+testing/
 
 # Local data (SQLite DB + uploaded files)
 backend/data/

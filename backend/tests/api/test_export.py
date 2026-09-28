@@ -165,7 +165,7 @@ def ready_doc() -> Iterator[tuple[Document, FakeDb]]:
 
 def test_export_endpoint_returns_docx_bytes(ready_doc):
     doc, db = ready_doc
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         client.post(f"/api/documents/{doc.id}/protocol")
         response = client.post(f"/api/documents/{doc.id}/protocol/export", json={"filename": "Протокол"})
 

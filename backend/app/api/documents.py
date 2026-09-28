@@ -2,29 +2,54 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import UploadFile
+from starlette.formparsers import MultiPartException
+from python_multipart.exceptions import MultipartParseError
+
+from app.api.upload_form import SingleFileParser, UploadLimitError
 
 from app.db.session import get_db
 from app.models.document import Document
 from app.models.enums import DocumentStatus
 from app.models.party import Party
+from app.models.protocol import Protocol, ProtocolRow
 from app.schemas.document import AnalysisOut, DocumentCreated, PreflightDiagnostic, PreflightMetrics
 from app.schemas.party import PartiesUpdateIn, PartyOut
 from app.schemas.validation import ValidationReportOut
 from app.services.ingestion import MAX_BYTES, IngestError, derive_contract_name, validate_upload
 from app.services.processing import process_document
+from app.services.protocol_state import refresh_validation, synchronize_agreed
 from app.services.storage import FileStorage
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
 
 @router.post("", response_model=DocumentCreated, status_code=201)
-def upload_document(
+async def upload_document(
+    request: Request,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> DocumentCreated:
+    # Explicit limits apply before a dependency/automatic File parser can run.
+    try:
+        form = await SingleFileParser(request.headers, request.stream(), MAX_BYTES).parse()
+    except UploadLimitError as exc:
+        raise HTTPException(413, exc.message) from exc
+    except (MultiPartException, MultipartParseError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    try:
+        file = form.get("file")
+        if len(form.multi_items()) != 1 or not isinstance(file, UploadFile):
+            raise HTTPException(400, "Требуется ровно один файл в поле file")
+        return await run_in_threadpool(_store_upload, file, background_tasks, db)
+    finally:
+        await form.close()
+
+
+def _store_upload(file: UploadFile, background_tasks: BackgroundTasks, db: Session) -> DocumentCreated:
     filename = file.filename or ""
     if not filename.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="Поддерживаются только файлы .docx без макросов")
@@ -61,6 +86,8 @@ def get_analysis(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Analy
         raise HTTPException(status_code=404, detail="Document not found")
 
     parties = db.query(Party).filter(Party.document_id == document_id).all()
+    if doc.validation_report is not None:
+        refresh_validation(db, doc)
     diagnostics_raw = ((doc.metadata_json or {}).get("preflight_diagnostics") or [])
     return AnalysisOut(
         id=doc.id,
@@ -127,7 +154,13 @@ def update_parties(
 
     if payload.drafting_party_id is not None:
         doc.drafting_party_id = payload.drafting_party_id
-        doc.status = DocumentStatus.PARTIES_CONFIRMED
+        for protocol in db.query(Protocol).filter(Protocol.document_id == document_id).all():
+            rows = db.query(ProtocolRow).filter(ProtocolRow.protocol_id == protocol.id).all()
+            synchronize_agreed(rows, existing[payload.drafting_party_id].role)
+        if doc.status == DocumentStatus.EXPORTED:
+            doc.status = DocumentStatus.BUILT
+        elif doc.status != DocumentStatus.BUILT:
+            doc.status = DocumentStatus.PARTIES_CONFIRMED
 
     db.commit()
     return get_analysis(document_id, db)

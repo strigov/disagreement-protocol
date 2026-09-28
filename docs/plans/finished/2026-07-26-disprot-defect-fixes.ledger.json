@@ -1,0 +1,1265 @@
+[
+  {
+    "id": "P1-B1",
+    "reviewer": "opus-plan",
+    "decision": "ACCEPTED",
+    "authorized_change": "В `## Contracts → Revision semantics` и в Ф3 Step 2 заменить решающий признак «абзац отсутствовал в оригинале». Сейчас план объявляет `w:pPr/w:rPr/w:ins` первоприоритетным и достаточным доказательством новизны абзаца, а текстовый анализ — вторичным. В OOXML знак абзаца завершает абзац, поэтому обычный жест Word «курсор в конец пункта 1.1 → Enter → набрать новый пункт» даёт `<w:p>1.1 текст<w:pPr><w:rPr><w:ins/></w:p>` + `<w:p><w:ins>новый текст</w:ins></w:p>`: вставленный знак абзаца оказывается у СТАРОГО пункта, а новый текст — в абзаце со старым знаком. По запланированному правилу существующий пункт 1.1 получил бы exists_in_original=False, потерял бы номер (fallback на `paragraph.text_runs[:32]` в ClauseSegmenter), не получил бы NEW_CLAUSE и сдвинул бы всю последующую нумерацию. Требуемое изменение: решающим сигналом сделать содержимое самого абзаца — абзац считается вставленным тогда и только тогда, когда его original_text пуст, а accepted_text не пуст (тот же сигнал, который ChangedClauseDetector уже использует для NEW_CLAUSE, что держит два понятия «новый» согласованными); `w:pPr/w:rPr/w:ins` использовать только как подтверждающий/tie-break сигнал для абзацев с пустым содержимым. Дополнительно добавить в Ф3 фикстуру-билдер и тест, где ПРЕДЫДУЩИЙ абзац несёт вставленный знак абзаца, а его собственные runs не тронуты: тест утверждает, что этот абзац сохраняет свой исходный номер и продвигает счётчик.",
+    "forbidden_expansions": [
+      "не менять семантику NEW_CLAUSE / DELETED_CLAUSE в ChangedClauseDetector",
+      "не расширять объём Ф3 за пределы нумерации и флага exists_in_original — остальные находки остаются в своих фазах",
+      "не пересматривать решения по находкам 10c / 10d / 10e — они остаются в `## Non-goals / deferred`",
+      "не переписывать публичную сигнатуру RevisionResolver сверх флага, который план уже вводит"
+    ],
+    "materiality": "REGRESSION",
+    "status": "fixed"
+  },
+  {
+    "id": "P1-B2",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "BUILD_BREAK",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B3",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B4",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "ACCEPTANCE_CRITERIA",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B5",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B6",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B7",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B8",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B9",
+    "reviewer": "opus-plan",
+    "decision": "NIT",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P1-B10",
+    "reviewer": "opus-plan",
+    "decision": "NIT",
+    "authorized_change": null,
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B1",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "Both-empty tie-break не определён, когда знак абзаца несёт И w:ins, И w:del (вставил один автор, удалил другой): Contracts не задаёт приоритет. Ветка недетерминирована; разумный выбор — del выигрывает (exists_in_original=True).",
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B2",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "Для вставленных абзацев Contracts не фиксирует конкретные confidence/source, хотя они продолжают участвовать в numbering_confidence_mean; закрепление (source=native, confidence=0.95, rendered_number=None) сделало бы проверку «preflight mean == validation mean» воспроизводимой на литерале.",
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B3",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "RawTable.has_revisions (ooxml_parser.py:119) считает любой .//w:ins|.//w:del внутри таблицы, включая знак абзаца в ячейке; Ф2 Step 4 не говорит, меняется ли предикат — риск ложного TABLE_CELL_CHANGE.",
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B4",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "После Ф3 Clause.confidence становится средней уверенностью нумерации, но ProtocolRowBuilder._confidence() по-прежнему выводит confidence строки из флагов и колонку не читает; согласование не описано.",
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B5",
+    "reviewer": "opus-plan",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "Модель «все правки отклонены» оставляет абзац с вставленным знаком абзаца отдельным, тогда как настоящее отклонение слило бы его со следующим. Компромисс верный, но явная строка в Risks удержала бы исполнителя от попытки склейки абзацев.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B6",
+    "reviewer": "opus-plan",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "## Files → Ф3 всё ещё описывает revision_resolver.py как «классифицировать вставленный/удалённый paragraph mark» — читается как первичное правило.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B7",
+    "reviewer": "opus-plan",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Contracts: «тогда и только тогда» рядом со вторым False-случаем читается как противоречие при быстром чтении.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B8",
+    "reviewer": "opus-plan",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Risks: независимый numbering_level нужен для style-based и manual/regex вставленных абзацев, а не для explicit numPr (там ClauseSegmenter._level_of уже возвращает ilvl).",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B9",
+    "reviewer": "opus-plan",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Формулировка «тот же критерий новизны, что у ChangedClauseDetector»: детектор дополнительно требует, чтобы все текстовые правки были INS — критерии согласованы, но не тождественны.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "P2-B10",
+    "reviewer": "opus-plan",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "В ## Acceptance criteria, ## Non-goals / deferred и ## Global Constraints остались инструкционные строки шаблона над фактическим содержимым.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B1-Ф1",
+    "reviewer": "opus-review",
+    "decision": "ACCEPTED",
+    "authorized_change": null,
+    "note": "CANNOT_VERIFY: в samples/README.md изменены только expected-result ячейки для samples 03 и 09 — весь samples/ не отслеживается, базовой версии для diff нет. CHECK `git log --all --oneline -- samples/README.md` дал пустой вывод, что совпало с EXPECT; ревьюер дополнительно подтвердил по mtime, что в фазе тронут только README.",
+    "forbidden_expansions": [],
+    "materiality": "CONSISTENCY",
+    "status": "verified-by-controller"
+  },
+  {
+    "id": "F1-B2-Ф1",
+    "reviewer": "opus-review",
+    "decision": "ACCEPTED",
+    "authorized_change": null,
+    "note": "CANNOT_VERIFY: критерий «sample 09 доходит до parsed» не закреплён тестом на уровне сервиса — новый тест проверяет только успешный run_pipeline. CHECK `grep -rn \"DocumentStatus.PARSED\" backend/tests/integration/test_sample_regressions.py` не дал совпадений, что совпало с EXPECT; статус PARSED следует структурно из processing.py, где он выставляется, если run_pipeline не бросил исключение.",
+    "forbidden_expansions": [],
+    "materiality": "ACCEPTANCE_CRITERIA",
+    "status": "verified-by-controller"
+  },
+  {
+    "id": "F1-B3-Ф1",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "В коммит фазы попадают ранее не отслеживаемые samples/*.docx, samples/07_edge_plain.txt и scripts/make_samples.py (569 строк). По mtime фаза их не создавала и не перегенерировала; закоммитить их обязательно, иначе новый backend/tests/integration/test_sample_regressions.py упадёт на чистом checkout. Совпадает с P1-B2.",
+    "forbidden_expansions": [],
+    "materiality": "BUILD_BREAK",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B4-Ф1",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "revision_resolver.py: run_text() дублирует извлечение t/delText/tab/br из ooxml_parser.py; общий helper предотвратил бы расхождение двух копий. run_text и containing_run — замыкания без захваченного состояния, могли бы быть module-level.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B5-Ф1",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Контрактный пункт «для пустого paragraph-mark run — accepted_text всего параграфа» тестом не закреплён: в одной фикстуре текст run непустой, в другой accepted_text пуст, поэтому ожидаемое \"\" неотличимо от ветки run-text. Ревьюер проверил работу fallback пробой — это пробел покрытия, не дефект.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B6-Ф1",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "test_resolve_format_only_changes_keeps_text_and_reports_authors сравнивает множество кортежей, поэтому дубль record тест не уронит; число записей закреплено лишь косвенно через format_only_count == 2. Явный len(...) == 2 отвечал бы шагу плана «Проверить число records».",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B7-Ф1",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Шаг 1 плана просит комментарий/PI «внутрь cell», а фикстура помещает их внутрь w:r ячейки, а не прямым потомком w:tc. Ревьюер пробой подтвердил, что guard достаточен для w:tc/w:tr/w:tbl — уже́ только тест, не код.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B8-Ф1",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "containing_run() идёт по getparent() без ограничения на p_elem: для абзаца внутри text-box run правка paragraph-mark rPrChange подхватила бы текст внешнего run. Согласуется с уже существующим поведением walk для INS/DEL.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B9-Ф1",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Фикстура-билдер содержит собственный assert (проверку инварианта построения); такие проверки принадлежат тесту, а не билдеру.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B10-Ф1",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Предсуществующий шум в каждом backend-прогоне: PytestDeprecationWarning про незаданный asyncio_default_fixture_loop_scope (backend/pyproject.toml). Не из этого diff и вне списка файлов Ф1.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B11-Ф1",
+    "reviewer": "codex-control",
+    "decision": "ACCEPTED",
+    "authorized_change": "backend/app/processing/revision_resolver.py (~строка 176, новый код детекции format-only): для каждого найденного `w:rPrChange` заново обходится весь содержащий `w:r`, поэтому несколько property-change элементов в одном run дают квадратичное время. Замеры контрольного ревьюера: 500 / 1000 / 2000 / 4000 элементов → 0,11 / 0,46 / 1,75 / 7,12 с. Такой XML хорошо сжимается, поэтому небольшой пользовательский .docx в пределах лимита 25 MB способен надолго занять in-process обработчик (пайплайн выполняется как FastAPI background task в том же процессе). Требуемое исправление: кэшировать результат `run_text` по содержащему `w:r`, чтобы каждый run обходился ровно один раз, сохранив при этом отдельный `RevisionRecord` для каждого change-элемента. Добавить тест, который фиксирует линейное поведение по смыслу — например, что при нескольких property-change элементах в одном run текст run извлекается один раз (или проверку через счётчик вызовов), а не только совпадение итоговых records.",
+    "forbidden_expansions": [
+      "не менять форму RevisionRecord и семантику FORMAT_ONLY, закреплённые в ## Contracts",
+      "не добавлять XMLParser(resolve_entities=False, no_network=True) — это отдельный DEFER-пункт F1-B12-Ф1",
+      "не рефакторить run_text / containing_run в module-level хелперы и не выносить общий helper с ooxml_parser.py — это DEFER-пункт F1-B4-Ф1",
+      "не трогать файлы вне списка файлов Ф1",
+      "не исправлять NIT-пункты F1-B5-Ф1 … F1-B10-Ф1"
+    ],
+    "materiality": "SECURITY",
+    "status": "fixed"
+  },
+  {
+    "id": "F1-B12-Ф1",
+    "reviewer": "codex-control",
+    "decision": "DEFER",
+    "authorized_change": null,
+    "note": "Явно передавать XMLParser(resolve_entities=False, no_network=True) в оба разбора XML (ooxml_parser.py, revision_resolver.py). Установленный lxml 5.3 уже отклоняет внешние сущности, поэтому это defense-in-depth.",
+    "forbidden_expansions": [],
+    "materiality": "SECURITY",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B13-Ф1",
+    "reviewer": "codex-control",
+    "decision": "NIT",
+    "authorized_change": null,
+    "note": "Review package был усечён инструментом посреди хунков; контрольный ревьюер для их оценки дополнительно прочитал ooxml_parser.py, revision_resolver.py, test_ooxml_parser.py и test_revision_resolver.py. Замечание про инструментарий: при больших пакетах ревьюеры могут видеть неполный diff.",
+    "forbidden_expansions": [],
+    "materiality": "NICE_TO_HAVE",
+    "status": "deferred"
+  },
+  {
+    "id": "F2-B1-Ф1",
+    "reviewer": "opus",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/processing/revision_resolver.py:171-194 — `w:rPrChange` на run внутри `w:ins`/`w:del` тоже даёт запись FORMAT_ONLY, поэтому `format_only_count` может включать форматные правки вставленного/удалённого текста. Это ровно то, что предписывает `## Contracts → Revision semantics` («каждый отдельный `w:rPrChange` … создаёт ровно один `RevisionRecord`»); на строки протокола и `covered_revisions` не влияет.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Информационное. Изменение семантики потребовало бы правки ## Contracts — вне объёма Ф1."
+  },
+  {
+    "id": "F2-B2-Ф1",
+    "reviewer": "opus",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/processing/test_validation_engine.py:114 — в тесте остался устаревший английский текст старого diagnostic-сообщения («format-only revisions detected (original==accepted)»). Строка нигде не сравнивается с production-кодом, файл вне списка файлов Ф1.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B3-Ф1",
+    "reviewer": "opus",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/processing/test_revision_resolver.py:642-658 — тест линейности использует `sys.settrace` и матчится на имя приватного вложенного замыкания `run_text`. Ломал бы измерение покрытия под `pytest --cov` (в репозитории не используется) и молча превратится в ложный провал при переименовании/инлайне замыкания.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B4-Ф1",
+    "reviewer": "opus",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/fixtures/builders.py:321-335 — `build_docx_with_many_run_format_only_revisions` кладёт 8 `w:rPrChange` в один `w:rPr`, что невалидно по схеме OOXML (допускается один `rPrChange` на `rPr`), хотя точно воспроизводит замеренный вектор блокера. Реалистичная форма масштабирования (N runs × 1 change) тестом не закреплена; ревьюер проверил её линейность пробой.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B1-Ф2",
+    "reviewer": "opus",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/models/clause.py:24-26 — docstring колонки `tables_json` описывает дофазную форму ячейки (`\"rows\": [[cell_text, ...], ...]`), хотя фаза сделала персистируемую ячейку объектом. Файл не входит в список файлов Ф2 (он в списке Ф3).",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Исправить в Ф3, которая и так меняет этот файл."
+  },
+  {
+    "id": "F1-B2-Ф2",
+    "reviewer": "opus",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/api/protocols.py:199 — `block_index=table.get(\"block_index\", 0)` читает ключ, который ни один writer не пишет (`backend/app/services/processing.py:57-81`). `## Contracts` фиксирует персистируемую форму таблицы как `{block_id, has_revisions, rows}`, поэтому не сохранять ключ правильно, а чтение навсегда остаётся no-op. Безвредно, но выглядит как незавершённое намерение.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B3-Ф2",
+    "reviewer": "opus",
+    "decision": "NIT-AUTHORIZED",
+    "authorized_change": "samples/README.md:11 — новая ячейка содержит неэкранированные `|` внутри inline-кода (`2026 год | 1 200 | 192 500`). В GFM код-спан не защищает пайпы внутри таблицы, поэтому строка парсится как 7 колонок против 3 у остальных и таблица рендерится сломанной. Починка: экранировать как `\\|`.",
+    "materiality": "NONE",
+    "status": "authorized-by-orchestrator",
+    "note": "Оркестратор явно авторизовал этот NIT: правка на один экранированный символ в файле, который фаза и так меняет, и без неё таблица в samples/README.md рендерится сломанной. Выполняется Sonnet quickfix-субагентом, никакого кода не касается."
+  },
+  {
+    "id": "F1-B4-Ф2",
+    "reviewer": "opus",
+    "decision": "NIT",
+    "authorized_change": "Строка test-strategy плана «несколько paragraphs в cell соединяются прежним пробелом» проверена только для неразрешённого fallback-пути (`backend/tests/services/test_protocol_generator.py:356-378`), но не для разрешённого пути в `backend/app/services/ingestion.py:78-79`. Ревьюер проверил разрешённый путь эмпирически — поведение корректно, не хватает только покрытия одной ветки.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B5-Ф2",
+    "reviewer": "opus",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/integration/test_pipeline_e2e.py:15 — `build_docx_with_table_cell_replacement` вставлен в блок импортов не по алфавиту (правила isort в ruff не включены, линт чист).",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B6-Ф2",
+    "reviewer": "opus",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/types.py:85-92 — `RawTable.cell_text` валидирует `version` и делегирует в `RawTableCell.text`, которая валидирует его повторно. Дублирующая проверка; обе предписаны планом, поэтому это только стиль.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B7-Ф2",
+    "reviewer": "opus",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/processing/test_validation_engine.py:206 — утверждение `covered_revisions == 2` пустое: `ValidationEngine` безусловно возвращает `covered_revisions=textual` (`backend/app/processing/validation_engine.py:167`). Оно фиксирует контракт шага 7, но не может провалиться независимо от строки выше.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B8-Ф2",
+    "reviewer": "codex-control",
+    "decision": "ESCALATED_TO_HUMAN",
+    "authorized_change": "BLOCKING, label plan-mandated, authorization_relation PLAN_ACCEPTANCE. backend/app/processing/changed_clause_detector.py:16-18 и backend/app/api/protocols.py:206-212 — путь `STANDALONE_TABLE` безусловно включает строку протокола, даже когда единственная revision в ячейке — FORMAT_ONLY и `table.has_revisions == False`. Контролёр подтвердил точечной пробой. why_now: Ф2 впервые проносит cell-level FORMAT_ONLY через весь pipeline, и отсутствие строки для такой правки — прямой acceptance-контракт фазы. minimal_fix (контролёра): в обоих селекторах исключить standalone clause, если её единственные найденные revisions — cell-level FORMAT_ONLY, сохранив существующее поведение для standalone-таблиц БЕЗ revisions и с текстовыми INS/DEL.",
+    "materiality": "PLAN_ACCEPTANCE",
+    "status": "resolved-by-user",
+    "note": "Конфликт двух правил плана. Ф2 шаг 4: «`has_revisions` остаётся textual INS/DEL сигналом: format-only cell не создаёт protocol row». Существующее правило STANDALONE_TABLE: отдельно стоящая таблица всегда даёт строку ручной проверки независимо от правок (это сохраняет и сам minimal_fix контролёра). Буквальное исполнение фикса даёт несогласованность: standalone-таблица без правок → строка есть, она же с одной форматной правкой → строки нет. Opus 4.1 в этом же раунде проверил инвариант и счёл его выполненным. Требуется решение пользователя: какое правило главнее. Фикс не диспатчить до ответа. РЕШЕНИЕ ПОЛЬЗОВАТЕЛЯ (2026-07-26): главнее правило STANDALONE_TABLE — отдельно стоящая таблица всегда даёт строку ручной проверки, потому что инструмент не умеет разбивать её на пункты; правило «format-only не создаёт строку» относится к таблицам внутри пункта. Код не меняется, фикс не диспатчится."
+  },
+  {
+    "id": "F1-B9-Ф2",
+    "reviewer": "codex-control",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/api/protocols.py:96-126,188-195 — защитить reader от повреждённого `tables_json`: `null`, non-dict object-cell и non-list `rows`/`revisions` сейчас дают AttributeError/TypeError. Валидный до-Ф2 writer сохранял строки, поэтому это hardening, а не нарушение обратной совместимости.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B10-Ф2",
+    "reviewer": "codex-control",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/api/test_protocols.py:202-224 — API-фикстура дублирует табличные INS/DEL одновременно в `ClauseModel.revisions` и в revisions object-ячейки, хотя production writer хранит их только в ячейке.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B11-Ф2",
+    "reviewer": "codex-control",
+    "decision": "NIT",
+    "authorized_change": "Пакет diff был усечён инструментом посреди хунка; контролёр дочитал оборванные production-функции и round-trip тесты отдельно.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B1-Ф3",
+    "reviewer": "opus-review",
+    "decision": "ACCEPTED",
+    "authorized_change": "class MUST_FIX_NOW. Три предписанных планом теста Ф3 отсутствуют или не различают регрессию, все — в области round-trip/метрик, которую план сам называет главным риском фазы. Поведение сегодня корректно (ревьюер проверил эмпирически), поэтому это пробел в защите от регрессий, а не живой дефект. Три подпункта:\n(a) backend/tests/integration/test_sample_regressions.py:76-84 — шаг 9 и Test strategy → Ф3 требуют закрепить, что preflight mean и ПЕРСИСТИРОВАННЫЙ validation mean совпадают для sample 01. Тест проверяет только `preflight_metrics[\"numbering_confidence_mean\"] == 0.4` и отсутствие LOW_CONFIDENCE; ни один тест не строит validation report из персистированного `paragraphs_json` для реального документа, а acceptance-критерий 3 опирается именно на это равенство. Починка: в тесте sample 01 (или соседнем) сериализовать clauses так же, как это делает processing.py, восстановить их так же, как build_protocol, и утвердить `ValidationEngine().validate(...).numbering_confidence_mean == preflight mean`.\n(b) backend/tests/api/test_protocols.py:244-335 — шаг 7 требует, чтобы API-фикстура задавала различающиеся confidence «нескольким paragraphs одной clause И нескольким clauses». В `doc_with_paragraph_payload` ровно одна clause, поэтому агрегация персистированного mean по нескольким clauses не проверяется. Починка: добавить вторую `ClauseModel` со своим `paragraphs_json` и другими confidence, утвердить mean по обеим.\n(c) backend/tests/api/test_protocols.py:337-348 — шаг 7 требует отдельно утвердить, что «annex label остаётся только `Clause.label`, а paragraph number — числовым». Тест проверяет `row[\"point_label\"] == \"Приложение № 1\"`, что читается из `clause.label` и потому прошло бы одинаково, даже если `_restore_paragraph` вернул бы удалённое поведение `rendered_number=cm.label`. Тест не различает ту регрессию, ради которой назван. Починка: утверждать на `rendered_number` восстановленного paragraph (например, что построенная строка/clause несёт `\"1.\"`/`\"1.1.\"` и никогда `\"Приложение № 1\"`).",
+    "forbidden_expansions": [
+      "не менять production-код, если тест не выявит настоящий дефект: ревьюер подтвердил корректность поведения эмпирически, задача раунда — закрепить его тестами",
+      "не исправлять NIT-пункты F1-B8-Ф3 … F1-B13-Ф3",
+      "не трогать отложенные пункты F1-B2-Ф3 … F1-B7-Ф3 (в том числе документирование нового session-warning в samples/README.md, forward pointer в README.md:45 и обработку OperationalError в processing.py)",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 (стороны, падежи, error_message) и Ф5 (frontend)"
+    ],
+    "materiality": "PLAN_ACCEPTANCE",
+    "status": "fixed"
+  },
+  {
+    "id": "F1-B2-Ф3",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "Шаг 6 плана говорит, что `ClauseModel` без payload получает «один безопасный synthetic paragraph». Реализация ветвится по `paragraphs_payload is not None` (backend/app/api/protocols.py:194-195), но у `paragraphs_json` есть column default `list`, поэтому любая реальная строка, вставленная без явного значения, хранит `[]` и уходит в payload-ветку, давая НОЛЬ paragraphs; ветка `else` достижима только для transient/фейковых моделей. Отклонение безвредно и как раз делает round-trip симметричным (у clause со standalone-таблицей и в памяти ноль paragraphs), но код больше не совпадает с записанным контрактом.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B3-Ф3",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "Три существовавших ранее diagnostic-сообщения переведены на русский (numbering_resolver.py:240, :277-278, :330-331). Список шагов Ф3 этого не предписывает (русское сообщение предписывалось только для нового diagnostic в Ф1); соответствует глобальному ограничению «Пользовательские строки — на русском», не меняет ни одного `code`, следом пришлось поправить только assert-ы тестов.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B4-Ф3",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "Побочный эффект честной метрики не задокументирован: поскольку mean теперь настоящий, документы с regex-нумерацией (0.7) или без неё попадают под порог `mean < 0.6` в validation_engine.py:97, поэтому ПЕРСИСТИРОВАННЫЙ validation report теперь получает session-warning `LOW_NUMBERING_CONFIDENCE_OVERALL` там, где старая фиктивная 1.0 его подавляла. Sample 01 — ровно такой документ (mean 0.4), а документ только со standalone-таблицей даёт mean 0.0 → «Нумерация не распознана». samples/README.md фиксирует новый mean 0.4, но не новое предупреждение.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B5-Ф3",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "Отказ на legacy-БД громкий, но документ остаётся в статусе `parsing`: `process_document` оборачивает только `run_pipeline` (backend/app/services/processing.py:29-37), поэтому `OperationalError` из финального `db.commit()` вылетает из background task и статус никогда не становится `failed`. Пользователь видит бесконечный спиннер и должен читать лог uvicorn; README:180 этот симптом уже описывает. Форма обработки ошибок существовала и раньше, но именно Ф3 делает её достижимой.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Рассмотреть в Ф4 — там как раз добавляется `error_message` в AnalysisOut и «причина ошибки анализа»."
+  },
+  {
+    "id": "F1-B6-Ф3",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "README.md:45 («Схема базы создаётся автоматически при старте») стоит на 137 строк выше нового предупреждения о сбросе на README.md:182 и, прочитанный отдельно, говорит обновляющемуся пользователю, что делать ничего не нужно. План велел поставить предупреждение «рядом с существующей reset-командой», то есть буква соблюдена; forward pointer со строки 45 сделал бы его находимым.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B7-Ф3",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/tests/integration/test_sample_regressions.py:98-108 закрепляет basedOn/style-нумерацию для sample 03 (`Статья I–III`, `1.4.1.`), но не закрепляет annex-половину шага 9 про `startOverride`. Unit-покрытие `startOverride` существует (tests/processing/test_numbering_resolver.py:45, :231), поэтому информационно.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B8-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:337-345 — `_native_level` единственный метод в файле без return-аннотации и дословно дублирует проверки `ilvl not in levels` / `num_fmt in (\"bullet\",\"none\")`, уже находящиеся внутри `_advance_and_render` (:373-378), плюс строит `effective_levels()` второй раз на абзац. Если одна копия когда-нибудь изменится, вставленный bullet-абзац начнёт репортить `source=\"native\", confidence=0.95`.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B9-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:246-252 — тройное вложенное условное выражение для `numbering_text` читается тяжело там, где хватило бы двух строк if/else.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B10-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/api/protocols.py:194 — `getattr(cm, \"paragraphs_json\", None)` на объявленной mapped-колонке; обычный доступ к атрибуту точнее выражает намерение (значение `None` бывает только у transient-моделей).",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B11-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/integration/test_pipeline_e2e.py:126 — `assert [row.point_label for row in rows if \"NEW_CLAUSE\" not in row.flags] == []` невнятный способ сказать «других строк нет»; а tests/integration/test_sample_regressions.py:97 (`not any(row.point_label == \"2.3.\" ...)`) избыточен рядом с точным сравнением списка двумя строками выше.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B12-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "`numbering_confidence=0.95` хранится для вставленных абзацев, у которых `rendered_number=None` намеренно (numbering_resolver.py:289-295), что поднимает mean документа за счёт абзацев вообще без номера. Предписано планом («сохранить … confidence/source распознавания»), поэтому не находка; отмечено как единственное место, где метрика награждает отсутствующий номер.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B13-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "Sample 10 не воспроизводит жест владения знаком абзаца: инверсия правила владения оставляет его номера неизменными. Жест покрыт единственным тестом `test_inserted_paragraph_does_not_consume_original_counter_but_mark_on_existing_does`, который различает инверсию.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B1-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "Обоснование дискриминации подпункта (a) в отчёте имплементера завышено: он утверждает, что чтение неверного поля при restore сломает assertion, но эмпирически — не сломает (проверено инверсией). Тест по-прежнему корректно охраняет равенство preflight mean == persisted mean; неверно только письменное обоснование — .superpowers/sdd/2026-07-26-disprot-defect-fixes/phase-Ф3-report.md:98.",
+    "materiality": "NONE",
+    "status": "nit",
+    "note": "Ревьюер объяснил, почему это не MUST_FIX_NOW: fallback на `cm.confidence` равен среднему абзацев этой clause, а документный mean, взвешенный по абзацам, инвариантен к подстановке среднего каждой clause вместо её членов — значит охраняемое свойство действительно сохраняется, и тест предписанной планом формы этот случай поймать не может. Per-paragraph fidelity закрыта в той же фазе тестом tests/services/test_processing.py::test_process_document_persists_paragraphs_and_real_confidence."
+  },
+  {
+    "id": "F2-B2-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/integration/test_sample_regressions.py:22-40 — `_serialize_paragraph_for_clause_model` вручную повторяет payload из processing.py, а не вызывает production writer, поэтому добавленный или переименованный ключ в processing.py этот тест не сломает; два места надо править синхронно. Production payload отдельно закреплён tests/services/test_processing.py.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B3-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/api/test_protocols.py:390 — `assert all(paragraph.rendered_number != \"Приложение № 1\" …)` строго следует из точного сравнения списка строкой выше, то есть избыточен.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B4-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/api/test_protocols.py:384,388 — `captured_clauses[0]` даст `IndexError` вместо внятного assert, если до builder не дошло ни одной clause; количество строк тест не проверяет.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B5-Ф3",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/integration/test_sample_regressions.py:56-62 — третья копия формулы «арифметическое среднее confidence абзацев» (processing.py, fallback-аргумент в protocols.py и этот тестовый хелпер).",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B6-Ф3",
+    "reviewer": "codex-control",
+    "decision": "ACCEPTED",
+    "authorized_change": "BLOCKING, label plan-mandated, authorization_relation PLAN_ACCEPTANCE. backend/app/processing/numbering_resolver.py:351 — `_effective_numpr` использует только текущие `RawParagraph.num_id`/`style_id`, а исходный `w:pPrChange/w:pPr` игнорируется. Контрольная проба: исходный стиль даёт `1.`, принятый стиль даёт `7.`, функция возвращает `7.`, хотя состояние «все правки отклонены» требует `1.`. При сопутствующей текстовой правке строка протокола бесшумно получит номер принятой редакции. why_now: это тот же класс юридически неверной ссылки на исходный договор, который обязана устранить Ф3. minimal_fix: извлекать из `w:pPrChange/w:pPr` исходные `pStyle`/`numPr` и для существующего исходного paragraph разрешать нумерацию по ним; добавить различающий тест с tracked style/numPr change.",
+    "materiality": "PLAN_ACCEPTANCE",
+    "status": "fixed",
+    "note": "Ярлык plan-mandated поставлен, поэтому по протоколу пункт не триажится оркестратором. ОДНАКО проверка текста плана показала: план НЕ предписывает текущее поведение. Строка 556 требует лишь «для native paragraph вычислять effective numPr/level до решения об advance» и молчит про `w:pPrChange`; явные отложенные решения 10c/10d/10e (авторы→стороны, headers/footers/footnotes, __pycache__) к этому отношения не имеют. То есть план underspecified, а не в конфликте с находкой, и предложенный фикс плану не противоречит — он полнее реализует его же цель. Требуется решение пользователя. РЕШЕНИЕ ПОЛЬЗОВАТЕЛЯ (2026-07-26): в протоколе должен стоять номер исходного договора, то есть нумерация существующего абзаца считается по исходным pStyle/numPr из w:pPrChange/w:pPr. Фикс авторизован.",
+    "forbidden_expansions": [
+      "не расширять правку за пределы исходных pStyle/numPr из w:pPrChange/w:pPr: не реконструировать остальные свойства абзаца из pPrChange",
+      "не менять существующие diagnostic-коды",
+      "не добавлять новые runtime-зависимости",
+      "не исправлять NIT-пункты F2-B1-Ф3 … F2-B5-Ф3 и F1-B8-Ф3 … F1-B13-Ф3",
+      "не трогать отложенные пункты F1-B2-Ф3 … F1-B7-Ф3, F2-B8-Ф3, F2-B9-Ф3",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ]
+  },
+  {
+    "id": "F2-B7-Ф3",
+    "reviewer": "codex-control",
+    "decision": "ACCEPTED",
+    "authorized_change": "authorization_relation SECURITY. backend/app/processing/numbering_resolver.py:38 — числовые поля hostile OOXML не ограничены: огромный `ilvl` запускает `range(ilvl)` на строке 393, а огромный `start`/`startOverride` для letter/Roman форматов вызывает гигантское выделение строки либо длинный цикл. Для атаки достаточно маленького DOCX с короткими десятичными литералами, поэтому лимит загрузки 25 MB не защищает. why_now: файл приходит из недоверенного источника и обрабатывается in-process как FastAPI background task — прямой trust-boundary failure. minimal_fix: до replay проверять допустимые конечные границы numbering-полей (`ilvl` — уровни Word 0–8; start/override — безопасный предел), значения вне диапазона отклонять или считать unresolved; закрепить тестами на ограниченность времени работы.",
+    "forbidden_expansions": [
+      "не менять существующие diagnostic-коды и не вводить новые пользовательские предупреждения сверх минимально необходимого",
+      "не добавлять новые runtime-зависимости",
+      "не исправлять NIT-пункты F2-B1-Ф3 … F2-B5-Ф3 и F1-B8-Ф3 … F1-B13-Ф3",
+      "не трогать отложенные пункты F1-B2-Ф3 … F1-B7-Ф3, F2-B8-Ф3, F2-B9-Ф3",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ],
+    "materiality": "SECURITY",
+    "status": "fixed"
+  },
+  {
+    "id": "F2-B8-Ф3",
+    "reviewer": "codex-control",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:38 — неизвестный `numFmt` трактуется как decimal, а отрицательный `start` сворачивается в `1`, но confidence при этом остаётся `0.95`.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F2-B9-Ф3",
+    "reviewer": "codex-control",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/api/protocols.py:129 — повреждённый `paragraphs_json`: явный `null` confidence исключается из среднего, а строковый confidence приводит к ошибке в `sum`. Production writer таких значений не создаёт.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F3-B1-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:265-270 — сообщение UNKNOWN_NUMID подставляет `p.num_id`, тогда как условие (изменённое в fix round 2) проверяет эффективный `num_id`. Если неизвестный id пришёл из original в `pPrChange` или из цепочки стилей, предупреждение называет не тот numId (`numId None отсутствует…` для style-resolved случаев). Код диагностики не меняется, это предупреждение уровня level; правка на один токен для более поздней фазы.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F3-B2-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:198-202 — `continue` в `_load_styles` при выходящем за диапазон ilvl у style-numPr пропускает регистрацию всего стиля, а не только его numPr, и тем самым обрывает цепочки `basedOn`, проходящие через этот стиль. Направление безопасное (unresolved, никогда не неверный номер).",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F3-B3-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/fixtures/builders.py:305-321 — builder дописывает `<w:rPr>` знака абзаца ПОСЛЕ `<w:pPrChange>` внутри `w:pPr`, тогда как порядок в схеме CT_PPr ставит `rPr` перед `pPrChange`. Латентно: ни один текущий тест не сочетает оба на одном абзаце, а форма самого `pPrChange` (id/author/date + вложенный `pPr`) соответствует реальному выводу Word.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F3-B4-Ф3",
+    "reviewer": "codex-control",
+    "decision": "ACCEPTED",
+    "authorized_change": "authorization_relation SECURITY. backend/app/processing/numbering_resolver.py:54 — числовые bounds неполны: допустимый `start=100000` в формате `lowerLetter` даёт 3847 символов на каждый placeholder, а подстановка на строке 451 повторяет их для НЕОГРАНИЧЕННОГО числа `%1` в `lvlText`; кроме того, производный счётчик на строке 430 может перерасти установленный предел. Проба контролёра: реальный DOCX 5629 байт с 2000 placeholders даёт номер длиной 7 694 000 символов; DOCX 1 375 492 байта с 10 000 абзацев задаёт порядка 80 780 000 000 символов результата. Эти строки удерживаются в `NumberingData`, затем в clauses и в `paragraphs_json`, поэтому маленький недоверенный файл способен исчерпать память in-process FastAPI. why_now: прямой trust-boundary DoS и незакрытая композиция авторизованного security-блокера F2-B7-Ф3; существующие тесты проверяют только один placeholder и потому подтверждают лишь границы входных полей, но не объём результата. minimal_fix: до формирования строки ограничить производный counter и ввести небольшой per-number плюс совокупный per-document budget подстановки; при превышении возвращать unresolved без нового diagnostic-кода. Добавить тест с допустимым `start=100000`, повторяющимися placeholders и несколькими абзацами, закрепляющий ограниченные время и объём результата.",
+    "forbidden_expansions": [
+      "не вводить новые diagnostic-коды и не переименовывать существующие",
+      "не добавлять новые runtime-зависимости",
+      "не строить общий слой валидации OOXML — ограничить только производный counter и объём подстановки в lvlText",
+      "не менять правило владения знаком абзаца, контракт exists_in_original и семантику FORMAT_ONLY",
+      "не менять уже принятые границы _MAX_WORD_LEVEL и _MAX_NUMBERING_START, если только этого не требует сам фикс",
+      "не исправлять NIT-пункты и не трогать отложенные пункты фазы",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ],
+    "materiality": "SECURITY",
+    "status": "fixed"
+  },
+  {
+    "id": "F3-B5-Ф3",
+    "reviewer": "codex-control",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:428 — раздельные `numId`, ссылающиеся на один `abstractNumId`, делят общий counter через `counters.setdefault(num.abstract_id, {})`; проверка двух независимых списков дала `[\"1.\", \"2.\"]` вместо `[\"1.\", \"1.\"]`. Поведение существовало до Ф3 и не затрагивает её прямые acceptance-примеры.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F4-B1-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/numbering_resolver.py (native-unrendered terminal, строки диффа 474–488) — в `resolve` блок `if not exists_in_original:` и безусловный блок сразу за ним конструируют побайтово одинаковый `NumberingData(None, 0.95, \"native\", structural_level)`; условие избыточно.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F4-B2-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "Побочный эффект авторизованного фикса, достойный строки в записи ревью: native-абзац, чей уровень рендерится пустым (например, пустой `lvlText`), теперь даёт unresolved-native с уверенностью 0.95 вместо дофазного отката на regex. Согласуется с принятым направлением «в сомнении не давать номер» и с прецедентом F2-B8-Ф3.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F4-B3-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/numbering_resolver.py (`_advance_and_render`, ранний возврат при насыщении счётчика) — возврат пропускает сброс счётчиков более глубоких уровней, поэтому под-уровни продолжают нумерацию сквозь насыщенные элементы предка вместо перезапуска. Достижимо только после 100 000-го элемента на уровне предка, а такие номера всё равно не отрисовываются.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F4-B4-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/processing/test_numbering_resolver.py::test_numbering_bounds_repeated_placeholders_at_allowed_start — `assert elapsed < 1.0` это утверждение по стенным часам в unit-тесте; запас после фикса стократный, а дискриминацию несут утверждения о длине, поэтому риск мигания минимален.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F4-B5-Ф3",
+    "reviewer": "codex-control",
+    "decision": "ACCEPTED",
+    "authorized_change": "authorization_relation SECURITY. backend/app/processing/numbering_resolver.py:341 — путь regex/manual numbering полностью обходит оба лимита длины. Принятый DOCX размером 1352 байта сохранил `rendered_number` длиной 1 100 001 символ, превышая и per-number 4096, и документный бюджет 1 000 000. В пути native-mismatch тот же capture сформировал diagnostic длиной 1 100 066 символов из DOCX в 1679 байт. why_now: ресурсный лимит фактически не действует на поддерживаемом manual-numbering пути; строки удерживаются в clauses, diagnostics и `paragraphs_json`. minimal_fix: до `group(1)` проверять длину через span; применять существующие per-number/document бюджеты ко всем сохраняемым regex-номерам и ограничить представление typed-number в mismatch-diagnostic.",
+    "materiality": "SECURITY",
+    "status": "fixed",
+    "note": "Сработал предел раундов (cap=4). Решение пользователя требуется до любого фикса. РЕШЕНИЕ ПОЛЬЗОВАТЕЛЯ (2026-07-26): авторизован дополнительный фикс-раунд сверх предела в 4 раунда; взяты все три находки.",
+    "forbidden_expansions": [
+      "не вводить новые diagnostic-коды и не переименовывать существующие",
+      "не добавлять новые runtime-зависимости",
+      "не строить общий слой валидации OOXML — ограничить только названные места",
+      "не менять правило владения знаком абзаца, контракт exists_in_original и семантику FORMAT_ONLY",
+      "не менять уже принятые константы _MAX_WORD_LEVEL, _MAX_NUMBERING_START, _MAX_DERIVED_COUNTER, _MAX_RENDERED_NUMBER_CHARS, _MAX_DOCUMENT_RENDERED_CHARS, если только этого не требует сам фикс",
+      "не исправлять NIT-пункты и не трогать отложенные пункты фазы",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ]
+  },
+  {
+    "id": "F4-B6-Ф3",
+    "reviewer": "codex-control",
+    "decision": "ACCEPTED",
+    "authorized_change": "authorization_relation SECURITY. backend/app/processing/numbering_resolver.py:483 — превышающий размер `lvlText` заново сканируется целиком для каждого абзаца, потому что отказ по длине происходит уже после `_PLACEHOLDER.finditer`. Принятый DOCX в 4464 байта с шаблоном из 200 000 символов `%x` и 10 000 абзацев занял 7,76 с в одном только резолвере, сохранив 0 символов; работа растёт как `paragraphs × len(lvlText)`. why_now: три константы ограничивают результат, но не работу рендерера. minimal_fix: ввести локальный верхний предел исходной длины `lvlText` и отклонять превышающий шаблон до `finditer`, без нового diagnostic-кода.",
+    "materiality": "SECURITY",
+    "status": "fixed",
+    "note": "Сработал предел раундов (cap=4). Решение пользователя требуется до любого фикса. РЕШЕНИЕ ПОЛЬЗОВАТЕЛЯ (2026-07-26): авторизован дополнительный фикс-раунд сверх предела в 4 раунда; взяты все три находки.",
+    "forbidden_expansions": [
+      "не вводить новые diagnostic-коды и не переименовывать существующие",
+      "не добавлять новые runtime-зависимости",
+      "не строить общий слой валидации OOXML — ограничить только названные места",
+      "не менять правило владения знаком абзаца, контракт exists_in_original и семантику FORMAT_ONLY",
+      "не менять уже принятые константы _MAX_WORD_LEVEL, _MAX_NUMBERING_START, _MAX_DERIVED_COUNTER, _MAX_RENDERED_NUMBER_CHARS, _MAX_DOCUMENT_RENDERED_CHARS, если только этого не требует сам фикс",
+      "не исправлять NIT-пункты и не трогать отложенные пункты фазы",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ]
+  },
+  {
+    "id": "F4-B7-Ф3",
+    "reviewer": "codex-control",
+    "decision": "ACCEPTED",
+    "authorized_change": "authorization_relation SECURITY. backend/app/processing/numbering_resolver.py:102 — `numbering.xml` и `styles.xml` полностью распаковываются, парсятся в DOM и материализуются до применения бюджетов, без ограничения развёрнутого размера или числа определений. Принятый DOCX в 244 018 байт со 100 000 `abstractNum` увеличил пиковый RSS примерно на 54 MB и сохранил все 100 000 записей модели; объём масштабируется до исчерпания памяти в пределах разрешённых 25 MB сжатого входа. why_now: остаётся прямой parse-time memory-DoS ПЕРЕД защитой, которая и должна ограничивать патологический numbering-вход. minimal_fix: перед `etree.parse` локально ограничить несжатый размер `numbering.xml`/`styles.xml` по `ZipInfo.file_size`, используя существующий fallback на unresolved/пустую модель при превышении.",
+    "materiality": "SECURITY",
+    "status": "fixed",
+    "note": "Сработал предел раундов (cap=4). Решение пользователя требуется до любого фикса. РЕШЕНИЕ ПОЛЬЗОВАТЕЛЯ (2026-07-26): авторизован дополнительный фикс-раунд сверх предела в 4 раунда; взяты все три находки.",
+    "forbidden_expansions": [
+      "не вводить новые diagnostic-коды и не переименовывать существующие",
+      "не добавлять новые runtime-зависимости",
+      "не строить общий слой валидации OOXML — ограничить только названные места",
+      "не менять правило владения знаком абзаца, контракт exists_in_original и семантику FORMAT_ONLY",
+      "не менять уже принятые константы _MAX_WORD_LEVEL, _MAX_NUMBERING_START, _MAX_DERIVED_COUNTER, _MAX_RENDERED_NUMBER_CHARS, _MAX_DOCUMENT_RENDERED_CHARS, если только этого не требует сам фикс",
+      "не исправлять NIT-пункты и не трогать отложенные пункты фазы",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ]
+  },
+  {
+    "id": "F5-B1-Ф3",
+    "reviewer": "fable-review",
+    "decision": "ACCEPTED",
+    "authorized_change": "class REGRESSION_FROM_AUTHORIZED_FIX. backend/app/processing/numbering_resolver.py:30 (применяется на :110) — `_MAX_NUMBERING_XML_BYTES = 200_000` ниже правдоподобных реальных размеров `numbering.xml`, поэтому легитимный документ тихо теряет ВСЮ нативную нумерацию (нарушение инварианта 6). Измерено, а не предположено: одно многословное девятиуровневое определение списка, как их пишет Word, занимает 2473 байта, то есть предел пересекается примерно на 80 накопленных определениях. Реалистичная проба с 85 определениями (`numbering.xml` = 205 089 байт) даёт `rendered=[None, None, None]` и вводящие в заблуждение предупреждения `UNKNOWN_NUMID` («numId отсутствует в numbering.xml» — он присутствует, резолвер отказался его читать), тогда как тот же документ с 40 определениями (96 549 байт) корректно рендерит `[\"1.\", \"1.1.\", \"2.\"]`. Word-документы накапливают определения списков в ходе обычной переписки, а долгоживущие договоры с включёнными правками — ровно целевая аудитория продукта; для калибровки: штатный шаблон Word внутри python-docx уже содержит `styles.xml` в 349 458 байт. minimal_fix: поднять `_MAX_NUMBERING_XML_BYTES` до значения с настоящим запасом (ревьюер предлагает 5 000 000: по масштабированию замера раунда 4 (~54 MB RSS на ~13 MB несжатого) предел в 5 MB удерживает худшую транзитную материализацию около 20 MB, что приемлемо для local-only in-process продукта с лимитом загрузки 25 MB; точная цифра — решение владельца) и поправить граничные утверждения в тестах backend/tests/processing/test_numbering_resolver.py:481 и :502 под новую константу.",
+    "materiality": "PLAN_ACCEPTANCE",
+    "status": "fixed",
+    "note": "Предел раундов исчерпан повторно. Это регрессия ОТ фикса, авторизованного пользователем в прошлом раунде, а не новая независимая находка. Точное значение константы ревьюер явно оставил на решение владельца. РЕШЕНИЕ ПОЛЬЗОВАТЕЛЯ (2026-07-26): поднять _MAX_NUMBERING_XML_BYTES до 5_000_000. ПОПРАВКА ПО ИЗМЕРЕНИЮ (раунд 6): оценка ревьюера раунда 5 «худшая транзитная память около 20 MB» занижена примерно в 5 раз. Измерено на свежем процессе по ru_maxrss: пакет, несущий ОБА part'а вплотную под лимитом (32 966 abstracts + 104 306 styles, 4 999 875 B + 4 999 976 B) → +112,5 MB за 0,41 с; предельная плотность элементов (~714 тыс. мелких элементов на part, ровно по 5 000 000 B) → +114,2 MB за 0,13 с. Два DOM одновременно не живут: дерево numbering освобождается до разбора styles.xml, поэтому пик равен одному DOM плюс удерживаемая модель, а не сумме. Итог: худший случай ~115 MB при разборе меньше секунды — приемлемо для локального однопользовательского продукта с лимитом загрузки 25 MB; значение 5 000 000 остаётся в силе. Не цитировать оценку в 20 MB как факт.",
+    "forbidden_expansions": [
+      "не менять никакие другие константы лимитов, кроме двух названных",
+      "не вводить новые diagnostic-коды и не переименовывать существующие",
+      "не добавлять новые runtime-зависимости",
+      "не менять правило владения знаком абзаца, контракт exists_in_original и семантику FORMAT_ONLY",
+      "не исправлять NIT-пункты F5-B3-Ф3, F5-B4-Ф3 и все прежние",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ]
+  },
+  {
+    "id": "F5-B2-Ф3",
+    "reviewer": "fable-review",
+    "decision": "ACCEPTED",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:31 — у `_MAX_STYLES_XML_BYTES = 1_000_000` запас тоньше, чем кажется: пустой документ, созданный Word (штатный шаблон python-docx), уже несёт `styles.xml` в 349 458 байт, то есть 35 % бюджета до единого пользовательского стиля. Для превышения нужно примерно 650 и более пользовательских стилей (редкость), поэтому само по себе не блокирует, но стоит поднять тем же однострочным изменением, пока файл открыт.",
+    "materiality": "NONE",
+    "status": "fixed",
+    "forbidden_expansions": [
+      "не менять никакие другие константы лимитов, кроме двух названных",
+      "не вводить новые diagnostic-коды и не переименовывать существующие",
+      "не добавлять новые runtime-зависимости",
+      "не менять правило владения знаком абзаца, контракт exists_in_original и семантику FORMAT_ONLY",
+      "не исправлять NIT-пункты F5-B3-Ф3, F5-B4-Ф3 и все прежние",
+      "не трогать файлы вне списка файлов Ф3",
+      "не реализовывать ничего из Ф4 и Ф5"
+    ],
+    "note": "РЕШЕНИЕ ПОЛЬЗОВАТЕЛЯ (2026-07-26): поднять _MAX_STYLES_XML_BYTES до 5_000_000 тем же фиксом — отложенный пункт повышен до авторизованного по прямому решению."
+  },
+  {
+    "id": "F5-B3-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:514 — проверка длины `lvl_text` выполняется один раз на каждый отрисованный абзац внутри `_render_level_text`, а не один раз на этапе `_parse_level`. Поведение бюджету соответствует (~O(1) на вызов), замечание чисто структурное.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F5-B4-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/processing/test_numbering_resolver.py:443 — `test_regex_numbering_rejects_oversized_typed_number_before_capture` утверждает `len(numbers[0].rendered_number or \"\") <= 4_096` сразу после утверждения, что то же значение `is None`; второе утверждение пустое.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F6-B1-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "Отчёт имплементера указывает размер `numbering.xml` фикстуры теста `lvlText` как 70 313 байт; ревьюер, воспроизведя фикстуру побайтово из backend/tests/processing/test_numbering_resolver.py:472-482, намерил 70 333. Несущественно: оба значения удовлетворяют утверждаемому диапазону `65 536 < размер < 5 000 000`, а тест проверяет вычисленное во время выполнения значение, а не зашитую константу.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F6-B2-Ф3",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "Оценка худшей транзитной памяти из раунда 5 (~20 MB) примерно в 5 раз ниже измеренной (~115 MB). Измеренная величина для этой модели развёртывания всё равно приемлема; зафиксировано, чтобы оценку не цитировали как факт (см. поправку в примечании F5-B1-Ф3).",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F6-B3-Ф3",
+    "reviewer": "codex-control",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:110-117 — атрибутно-плотный XML поднимает пик выше прежних оценок: `numbering.xml` 4 999 875 B плюс `styles.xml` 5 000 000 B дали +237,2 MiB RSS (291,1 MiB всего) за 0,342 с. Лимит остаётся конечным и приемлемым для локального однопользовательского процесса; менять cap не требуется.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Третья независимая оценка пиковой памяти в этой фазе: ~20 MB (раунд 5, оценка), ~115 MB (раунд 6, fable, измерение), ~237 MiB (раунд 6, codex, измерение на атрибутно-плотном входе). Разброс объясняется формой XML: плотность атрибутов даёт больший DOM при том же числе байт. Все три сходятся в выводе, что предел конечен и приемлем для локального однопользовательского процесса."
+  },
+  {
+    "id": "F1-B1-Ф4",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/api/documents.py:68 / backend/app/services/processing.py:35 — сырой текст исключения доходит до клиента. `get_analysis` возвращает `Document.error_message`, который заполняется как `str(exc)[:2000]`. Ревьюер воспроизвёл три реалистичных сценария: `FileNotFoundError` даёт абсолютный путь хоста в пользовательском поле; `XMLSyntaxError` даёт только структурную информацию без содержимого документа; `BadZipFile` — «File is not a zip file». Не блокирует: продукт local-only по глобальному ограничению (путь принадлежит самому оператору), план предписывает возвращать сохранённое значение дословно, а санитизация потребовала бы правки processing.py, который не входит в список файлов Ф4.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Стоит зачистить в фазе, которая владеет processing.py."
+  },
+  {
+    "id": "F1-B2-Ф4",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:48-55 — `re.DOTALL` предписан планом (Ф4 шаг 3) и действительно необходим: `preamble_text` собирается через `\"\\n\".join(...)`, поэтому многоабзацная преамбула иначе не разбирается. Побочный эффект: ленивый `.*?` теперь может перешагнуть границу абзаца, и если у распознанной стороны нет своей ролевой оговорки, а следующая сторона в нераспознаваемой форме (физлицо), первая наследует роль второй. Такое же неверное спаривание случалось и до изменения, когда обе стороны стояли в одной строке, то есть это не новый ВИД отказа, а разделение по спанам предотвращает его всегда, когда обе стороны — распознанные организации.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B3-Ф4",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:35 — шестая альтернатива кавычек `”[^“]+“` выходит за пределы пяти пар, задокументированных в контракте, и не покрыта тестом. Достижима, но не входит в замороженную грамматику.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B4-Ф4",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/services/party_extractor.py:28 — неразрывный пробел внутри многословной организационно-правовой формы ломает новые префиксы полных форм: `re.escape` вшивает литеральный пробел в каждую альтернативу, поэтому «Общество\\xa0с\\xa0ограниченной\\xa0ответственностью «Гамма»» не извлекает ни одной стороны (путь коротких аббревиатур не затронут — `\\s+` неразрывный пробел матчит). Документы из Word часто несут NBSP именно там. Не регрессия (в базе полных форм не было вовсе) и деградирует в «стороны не найдены», а не в неверную сторону. Замена литеральных пробелов на `[\\s\\u00A0]+` закрыла бы.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B5-Ф4",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/services/party_extractor.py:38,42 — `NAME_QUOTED` и `ROLE_QUOTED` теперь просто псевдонимы `QUOTED_TEXT`; два имени из трёх избыточны.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B6-Ф4",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/services/test_protocol_generator.py:114-136 — `test_edition_label_uses_genitive_for_known_roles` утверждает внутри цикла по словарю, повторяющему `_GENITIVE_RULES`; при провале сообщается только первая плохая роль. `@pytest.mark.parametrize` изолировал бы провалы, как уже сделано в соседнем тесте на варианты кавычек.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B7-Ф4",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/api/test_documents_analysis.py:119-131 — `test_get_analysis_returns_saved_error_message_for_failed_document` выставляет `status = FAILED`, но не утверждает `body[\"status\"] == \"failed\"`, поэтому не закрепляет ту связку, на которую опирается фронтенд-трек.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B8-Ф4",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/services/protocol_generator.py:38 — в `_GENITIVE_RULES` есть только «Заёмщик»; куда более частое написание «Заемщик» проваливается в запасной вариант «Редакция стороны «…»». Контракту соответствует, но второй ключ дёшев.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F2-B1-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "ACCEPTED",
+    "authorized_change": "backend/app/services/party_extractor.py:31 — альтернатива для «ёлочек» `«[^»]+»` обрывает название на первой внутренней `»`. Для `ООО «Группа «Ромашка» Холдинг», именуемое в дальнейшем «Заказчик»` извлекается `ООО «Группа «Ромашка»` с уверенностью 0.9, то есть усечённое юридическое наименование сохраняется как достоверное. Разрешено: заменить альтернативу для «ёлочек» на шаблон с одним сбалансированным уровнем вложенности (например `«(?:[^«»]|«[^«»]*»)+»`) и добавить тест на точное полное наименование. Только «ёлочки»: симметричные пары (`\"…\"`, `'…'`) вложенность в принципе не различают, их не трогать.",
+    "materiality": "DATA_LOSS",
+    "status": "open",
+    "note": "Проба ревьюера 4.1 на 26 входах включала случай «вложенная кавычка» и отчиталась о пустом результате — значит проверялась другая форма вложенности. Имплементер обязан сначала воспроизвести строку контрольного ревью дословно как RED."
+  },
+  {
+    "id": "F2-B2-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/api/documents.py:68,130 — связь `status` и `error_message` не формализована: `PATCH /parties` переводит ранее упавший документ в `parties_confirmed`, не очищая сохранённую ошибку. Контрольное ревью само отмечает, что клиент Ф5 читает поле только при `failed`, поэтому ни опрос, ни критерии приёмки не нарушаются; инвариант стоит определить отдельной фазой.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F2-B3-Ф4",
+    "reviewer": "fable-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:34 — при нечётном числе «ёлочек» у первой стороны (`ООО «Группа «Ромашка», именуемое …»` плюс вторая сторона) раньше извлекалась усечённая первая сторона, теперь она молча отсутствует, а вторая возвращается верно. Направление безопасное (сторона пропущена, а не подменена; оператор всё равно подтверждает стороны через `PATCH /parties`), но стоит отметить в фазе, которая владеет диагностикой экстрактора.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F2-B4-Ф4",
+    "reviewer": "fable-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:34 — наименования с двумя уровнями вложенности теперь дают пустой результат вместо усечённого. Это соответствует разрешённой области (ровно один уровень); расширение до произвольной вложенности требует отдельной авторизации.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F2-B5-Ф4",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/services/test_party_extractor.py — `test_nested_guillemet_does_not_consume_following_party` прошёл бы и в случае, если бы коллизию одинаковых ролей замаскировала дедупликация по роли. Тест уже использует различающиеся роли, поэтому замечание теоретическое.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F3-B1-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "ACCEPTED",
+    "authorized_change": "backend/app/services/party_extractor.py — организация внутри оборота «в лице …» становится границей entity-span и забирает роль основной стороны. Для `ООО \"Альфа\", в лице управляющей компании ООО «Управдом», именуемое в дальнейшем \"Заказчик\"` до фазы возвращалось `ООО \"Альфа\" / Заказчик / 0.9`, сейчас возвращается `ООО «Управдом» / Заказчик / 0.9`. «Управдом» — управляющая компания, действующая от имени стороны, а не сама сторона. Разрешено: не создавать границу entity для организации внутри незавершённого оборота «в лице …» до ролевой оговорки текущей стороны, плюс точные регрессионные тесты. Грамматику кавычек, значения confidence и разбиение по спанам в остальном не трогать.",
+    "materiality": "DATA_LOSS",
+    "status": "fixed-r3",
+    "note": "Контрольное ревью классифицировало находку как REGRESSION_FROM_AUTHORIZED_FIX, то есть как следствие правки регулярки во втором раунде. Оркестратор проверил это отдельным прогоном трёх состояний (054baed / основная работа фазы без правки регулярки / текущее дерево): значения ревьюера верны, атрибуция неверна. На спорной строке состояние «без правки регулярки» уже даёт `ООО «Управдом»` — правка регулярки на этом входе инертна и влияет только на случай вложенного наименования. Дефект внесён основной работой фазы, заменившей эвристику ENTITY_START на полное сопоставление сущности. Поэтому materiality DATA_LOSS, а не регрессия от авторизованного фикса; правку регулярки откатывать нельзя."
+  },
+  {
+    "id": "F4-B1-Ф4",
+    "reviewer": "fable-review",
+    "decision": "ACCEPTED",
+    "authorized_change": "backend/app/services/party_extractor.py:59 (`_ROLE_MARKER`) — подавление границы спана внутри оборота «в лице» снимается только формой `именуем(ое|ый|ая) в дальнейшем`, то есть набором более узким, чем ролевая грамматика самого экстрактора: `PATTERN_DALEE_DASH` (строка 52) — вторая официально поддерживаемая форма продукта. Если ролевая оговорка первой стороны записана иначе, подавление не снимается и спан второй стороны поглощается. Разрешено: расширить `_ROLE_MARKER` так, чтобы подавление снимала любая ролевая оговорка (проверенный ревьюером вариант — `re.compile(r\"именуем\\w*|\\bдалее\\b\", re.IGNORECASE)`), плюс точные регрессионные тесты на случаи A1 и A2. Больше ничего не трогать.",
+    "materiality": "DATA_LOSS",
+    "status": "open",
+    "note": "Доказано тремя входами при сравнении с состоянием второго раунда (ревьюер эмпирически смоделировал его, отключив `_is_unfinished_in_face_clause`). A1 `ООО «Альфа», в лице директора Иванова И.И., действующего на основании Устава (далее — Заказчик), и ООО «Бета» (далее — Исполнитель)` — вторая сторона молча теряется. A2 (дефис-форма у первой, `именуемое` у второй) — `ООО «Альфа»` выдаётся дважды и получает роль «Бета» с уверенностью 0.9. A3 (`в дальнейшем именуемое` с обратным порядком слов) — уверенно неверная сторона при 0.9. Все три во втором раунде обрабатывались верно. Оборот `в лице <должность>, действующего на основании Устава` — шаблонный текст практически любого российского договора, а дефис-форма предписана планом и покрыта существующим тестом, то есть A1 — пересечение двух форм, которые продукт сам заявляет поддерживаемыми."
+  },
+  {
+    "id": "F4-B2-Ф4",
+    "reviewer": "fable-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:113-125 — псевдоним `(далее — УК)`, привязанный к организации внутри оборота «в лице», порождает фантомную запись `('ООО «Альфа»', 'УК', 0.85)` рядом с двумя верными сторонами: оба шаблона срабатывают внутри одного спана. Ревьюер проверил, что в текущем коде и во втором раунде поведение неверно по-разному, то есть это взаимодействие шаблонов существовало и раньше, а не внесено третьим раундом. Лишняя строка-кандидат, а не подменённое наименование; оператор всё равно подтверждает стороны через `PATCH /parties`.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F4-B3-Ф4",
+    "reviewer": "fable-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:53 — короткое тире `–` (U+2013) в `(далее – Заказчик)` не покрыто классом `[—-]` в `PATTERN_DALEE_DASH`. Ограничение базовой версии, деградирует в пустой результат — направление безопасное.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F4-B4-Ф4",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/tests/services/test_party_extractor.py — из шести новых тестов третьего раунда только два (собственно «в лице») падают на коде до правки; остальные четыре — сторожевые регрессионные, а не RED. Форма утверждений правильная: везде точные кортежи `(name, role)`. Поведение «в лице» покрыто только юнит-тестами, хотя sample-03 проходит вариант с физлицом сквозным путём.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F5-B1-Ф4",
+    "reviewer": "verification-gate",
+    "decision": "ESCALATED_TO_HUMAN",
+    "authorized_change": "backend/app/services/party_extractor.py — оборот «в лице», стоящий ПОСЛЕ ролевой оговорки своей стороны, снова поглощает следующую сторону. Вход `ООО «Альфа» (далее — Продавец), в лице директора Иванова И.И., и ООО «Бета», именуемое в дальнейшем «Покупатель»` даёт `ООО «Альфа» / Покупатель / 0.9` и `ООО «Альфа» / Продавец / 0.85`: «Бета» исчезает, а её роль достаётся «Альфе» с уверенностью 0.9. Правка не назначена — достигнут предел в 4 раунда ревью, решение за владельцем проекта.",
+    "materiality": "DATA_LOSS",
+    "status": "fixed-r5",
+    "note": "Закрыто добавлением `_PARTY_SEPARATOR`: подавление снимает только союз «и», разделяющий стороны, после последнего «в лице». Признак «у кандидата есть своя ролевая оговорка» был отвергнут намеренно — по нему «Управдом» снова стал бы стороной и откатил фикс третьего раунда. Гейт подтвердил все 13 накопленных случаев. Диагностика гейта: `_is_unfinished_in_face_clause` видит, что маркер «далее» для «Альфы» предшествует более позднему «в лице», поэтому спан не закрывается перед «Бетой», вся преамбула схлопывается в одну сущность, и нежадный `.*?` в `PATTERN_DALEE_QUOTED` привязывает крайнее левое имя к чужой роли. Остальные 10 из 11 проб верны, 169 тестов зелёные, ruff чист. Это четвёртая подряд находка класса «уверенно неверная сторона» в одном подсистемном узле: раунд 1 — усечение вложенного наименования, раунд 2 — подмена стороны управляющей компанией, раунд 3 — поглощение второй стороны при неузнанной форме ролевой оговорки, раунд 4 — то же поглощение при обратном порядке оборотов."
+  },
+  {
+    "id": "F5-B2-Ф4",
+    "reviewer": "fable-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py (`_PARTY_SEPARATOR`, `_is_unfinished_in_face_clause`) — остаточный класс: одиночный союз «и» ВНУТРИ незавершённого оборота «в лице», за которым следует кандидат с организационно-правовой формой, снимает подавление, и кандидат забирает роль стороны с уверенностью 0.9. Четыре пробы (два носителя-организации через «и»; совместные подписанты, где второй — ИП; перечисление оснований `Устава и решения единственного участника АО «Холдинг»`; составная должность перед организацией-носителем).",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Ревьюер прямо заявил, что все четыре входа сконструированы специально, чтобы сломать парсер, и что честного довода о распространённости ни для одного он привести не может: совместные управляющие организации юридически возможны по ГК 65.3, но в преамбулах ООО практически не встречаются. Все конструкции с настоящим доводом о распространённости проверены и верны — включая перечисление оснований без организации после «и», доверенность, выданную самой стороной, многоабзацную преамбулу с полными формами и носителя внутри `доверенности, выданной ООО «УК»`. Это ровно тот класс, который поймала бы отклонённая владельцем проверка связности; записано для владельца, не пересматривается."
+  },
+  {
+    "id": "F5-B3-Ф4",
+    "reviewer": "fable-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py (`PATTERN_DALEE_DASH` + `setdefault`) — шаблонная концовка `заключили настоящий Договор (далее — Договор)` порождает фантомную третью запись: та же организация с ролью «Договор» и уверенностью 0.85. Вход реалистичный, но обе настоящие стороны присутствуют и верны, а `PATCH /parties` требует ровно двух сторон, поэтому фантом не может незаметно дойти до протокола.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Ревьюер эмпирически сравнил с базой 054baed на ASCII-варианте: фантом воспроизводится один в один, то есть механизм существовал до фазы и не является регрессией. Тот же класс, что и ледженный F4-B2."
+  },
+  {
+    "id": "F5-B4-Ф4",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/services/party_extractor.py — `ENTITY_START` изменён с нулевой ширины (lookahead) на потребляющее сопоставление, поэтому `finditer` пропускает перекрывающиеся начала сущностей. Ни на одном входе батареи эффекта не обнаружено.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F5-B5-Ф4",
+    "reviewer": "fable-review",
+    "decision": "NIT",
+    "authorized_change": "backend/app/services/party_extractor.py — `_ROLE_MARKER` (`именуем\\w*`) матчит и множественное «именуемые», которое грамматика извлечения намеренно не поддерживает. Направление безопасное: подавление снимается, результат деградирует в пустой (проба подтвердила `[]`).",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F6-B1-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "ESCALATED_TO_HUMAN",
+    "authorized_change": "backend/app/services/party_extractor.py:63 — `_PARTY_SEPARATOR` принимает союз внутри перечисления оснований («на основании Устава и Решения …») за границу сторон. На преамбуле опубликованной оферты Garpun экстрактор возвращает `Общество с ограниченной ответственностью «Де Вижен» / Лицензиар / 0.9` и `ООО «Де Вижен» / Лицензиат / 0.9`, тогда как настоящий Лицензиат — «любое физическое лицо». Предложенная правка: потребовать пунктуационную границу перед союзом, `_PARTY_SEPARATOR = re.compile(r\",\\s*и(?=\\s|,)\", re.IGNORECASE)`, плюс регрессионный тест на опубликованную преамбулу. Правка не назначена — предел раундов исчерпан, решение за владельцем проекта.",
+    "materiality": "DATA_LOSS",
+    "status": "fixed-r6-partially",
+    "note": "Закрыта только бесзапятая половина класса; см. F7-B1-Ф4. Это ровно тот класс, который ревью 4.1 отложило как нереалистичный (проба A5, «Устава и решения единственного участника АО «Холдинг»»). Контрольное ревью опровергло довод о распространённости тремя источниками: действующая версия той же оферты, типовая форма трудового договора с генеральным директором и судебное дело. Довод об изоляции тоже опровергнут эмпирически: результат содержит РОВНО две записи, поэтому проходит обе проверки — `PATCH /parties` принял (`PATCH_ACCEPTED_COUNT=2`), протокол собрался (`BUILD_STATUS=built`), экспорт вернул 200 (`EXPORT_DOCUMENT_STATUS=exported`). То есть уверенно неверная сторона доходит до выгружаемого документа. Отдельно важно: отклонённая владельцем проверка связности этот случай НЕ поймала бы — обе записи несут разные строки («Общество с ограниченной ответственностью «Де Вижен»» и «ООО «Де Вижен»»), хотя это одно юридическое лицо. Ревьюер проверил предложенную правку в памяти: остаётся только верный Лицензиар, а кейс четвёртого раунда сохраняется (`ООО «Альфа» / Продавец`, `ООО «Бета» / Покупатель`)."
+  },
+  {
+    "id": "F7-B1-Ф4",
+    "reviewer": "fable-review",
+    "decision": "ESCALATED_TO_HUMAN",
+    "authorized_change": "backend/app/services/party_extractor.py:63 — требование запятой перед союзом закрывает только бесзапятую половину класса. Русская пунктуация ТРЕБУЕТ запятой перед «и», когда предыдущий член перечисления закрывает обособленный оборот, а перечисления оснований полномочий состоят из таких оборотов сплошь. Предложенная правка: привязать разделитель к тому, что СЛЕДУЕТ за союзом, — `_PARTY_SEPARATOR = re.compile(rf\",\\s*и\\s*(?={ENTITY_PREFIX}\\s|$)\", re.IGNORECASE)`. Ветка `$` обязательна: `_is_unfinished_in_face_clause` видит текст, усечённый по началу кандидата, поэтому `, и` непосредственно перед кандидатом по построению стоит перед сущностью. Правка не назначена — решение за владельцем проекта.",
+    "materiality": "DATA_LOSS",
+    "status": "fixed-r7",
+    "note": "Решающая проба не содержит пунктуационных ошибок вообще: `действующего на основании доверенности от 01.02.2025, удостоверенной нотариусом города Москвы Петровой П.П., и Устава ООО «УК Прогресс», именуемое в дальнейшем «Арендодатель», с одной стороны, и ООО «Бета»…` даёт `ООО «УК Прогресс» / Арендодатель / 0.9` — управляющая организация забирает роль настоящей стороны. Оба наименования правдоподобны, подтверждение сторон это не выловит. Ключевой вывод ревьюера о причине всей серии: слабый сустав — прокси-признак разделителя, потому что форма пунктуации не различает перечисление оснований и соединение сторон; различает то, что следует за союзом (кандидат с организационно-правовой формой против существительного-документа в родительном падеже). Раунды 5 и 6 чинили один и тот же прокси; предложенная правка переносит разделитель на структурный признак. Проверено эмпирически: все 27 тестов проходят, опубликованная оферта даёт одну верную сторону, случай четвёртого раунда сохраняется, композитные преамбулы верны целиком. Ревьюер отдельно отметил, что устойчивое решение в долгую — сегментация по ролевым оговоркам, а не по началам сущностей, но это редизайн вне полномочий фазы, и он его НЕ требует."
+  },
+  {
+    "id": "F8-B1-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "ESCALATED_TO_HUMAN",
+    "authorized_change": "backend/app/services/party_extractor.py:63 — структурный якорь требует организационно-правовую форму НЕПОСРЕДСТВЕННО после союза, поэтому вводный квалификатор ломает разделение: при `, и юридическое лицо ООО «X»` усечённый сегмент заканчивается на `юридическое лицо `, разделитель не срабатывает, вторая сторона теряется, а её роль достаётся первой. Предложенная правка: ограниченно разрешить документированный квалификатор `юридическое лицо` между союзом и формой, плюс точный регрессионный тест. Правка не назначена — решение за владельцем проекта.",
+    "materiality": "DATA_LOSS",
+    "status": "fixed-r8",
+    "note": "Оркестратор усомнился в классификации и проверил три состояния (раунд 5 / раунд 6 / текущее) на реконструированной преамбуле: сомнение не подтвердилось, регрессия настоящая. Раунды 5 и 6 на этом входе давали верный результат (`ЗАО «Америабанк»`/`Продавец` и `ООО «Дискавери Ситипарк»`/`Покупатель`), текущий даёт `ЗАО «Америабанк»` дважды с обеими ролями и теряет вторую сторону. Контрольный вход без слов «юридическое лицо» верен во всех трёх состояниях — причина изолирована точно. ВАЖНО ПРО СЕВЕРНОСТЬ: форма отказа здесь ВИДИМАЯ — одна компания в обеих ролях бросается в глаза на экране подтверждения сторон, в отличие от находок раундов 5–7, где молча подставлялась правдоподобная чужая компания. Отдельное наблюдение оркестратора: перечисление квалификаторов — не лень, а единственный безопасный вид правки; обобщённое «пропустить несколько слов между союзом и формой» заново открыло бы случай `и Устава ООО «УК Прогресс»`, который раунд 7 как раз закрыл, потому что там между союзом и формой ровно одно слово."
+  },
+  {
+    "id": "F9-B1-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "ESCALATED_TO_HUMAN",
+    "authorized_change": "backend/app/services/party_extractor.py:98 — подавление «в лице» не применяется к ПЕРВОМУ кандидату вообще: условие начинается с проверки непустого списка предыдущих кандидатов. Если первая сторона записана в форме, которую экстрактор не знает (город Москва, орган власти, иностранная компания), её представитель внутри оборота «в лице» молча становится первой стороной. Проба вернула `ГУП «МГЦАЖ» / Арендодатель / 0.9` и `ООО «Ромашка» / Арендатор / 0.9`, хотя первой стороной был город Москва, а ГУП — его представитель. Аналогично иностранная компания подменяется своим российским представительством. Предложенная правка: применять существующую `_is_unfinished_in_face_clause` и к первому кандидату, передавая `previous_start=0`, когда список пуст, плюс точный регрессионный тест. Правка не назначена — решение за владельцем проекта.",
+    "materiality": "DATA_LOSS",
+    "status": "fixed-r9",
+    "note": "failure_kind: SILENT — оператор видит две разные правдоподобные организации без признака ошибки, и обе проходят проверку ровно двух сторон вплоть до экспорта. Это НЕ очередная заплата к `_PARTY_SEPARATOR`, а отдельный структурный пробел. Атрибуция: до фазы «ёлочки» не распознавались вовсе, и на этой строке возвращалась пустота, то есть фаза превратила безопасный пустой результат в молчаливо неверный; ASCII-вариант был неверен и до фазы, значит корень старый, но Ф4 распространила его на «ёлочки». ВАЖНО: в отличие от находок раундов 5–8, предложенную правку ревьюер в памяти НЕ проверял — песочница запретила запись даже временных файлов. Проверку обязан выполнить имплементер на полной батарее."
+  },
+  {
+    "id": "F9-B2-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:64 — двойной пробел внутри разрешённого квалификатора (`юридическое  лицо`) не распознаётся, результат — `ЗАО «Америабанк»` дважды с обеими ролями.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "failure_kind: VISIBLE — дубль одной компании в двух ролях заметен на экране подтверждения сторон. Тот же принятый размен, что и для прочих нераспознанных квалификаторов."
+  },
+  {
+    "id": "F10-B1-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:98 — безусловная проверка первого кандидата может подавить настоящую первую сторону, если предшествующий самостоятельный абзац оканчивается оборотом «в лице». Текущий код вернул только `АО «Бета» / Покупатель`, тогда как до правки раунда 9 возвращались обе стороны.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "failure_kind: VISIBLE — сторона пропадает, а не подменяется. Это цена закрытия молчаливой подмены представителем (F9-B1-Ф4), и размен сделан в безопасную сторону. Проверено ревьюером сравнением с состоянием раунда 8."
+  },
+  {
+    "id": "F10-B2-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/party_extractor.py:52 — роль в кавычках после дефисной формы, `(далее — «Исполнитель»)`, не соответствует `PATTERN_DALEE_DASH` и даёт пустой результат, хотя контракт плана обещает кавычки для роли. Форма встречается в опубликованных офертах.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "failure_kind: VISIBLE — пустой результат, а не подмена. Кандидат на отдельную фазу вместе с расширением ролевой грамматики; в текущей фазе грамматика заморожена."
+  },
+  {
+    "id": "F10-VERDICT-Ф4",
+    "reviewer": "codex-control-review",
+    "decision": "VERIFIED",
+    "authorized_change": "Итог девяти раундов ревью: контрольное ревью вернуло REVIEW_OK и на прямой вопрос о готовности ответило, что выпускало бы фазу — реалистичной молчаливой подмены стороны вне уже закрытых классов не обнаружено.",
+    "materiality": "NONE",
+    "status": "verified-by-controller",
+    "note": "Совокупная логика по формулировке ревьюера: распознанные организации разделяют спаны, кроме кандидатов внутри незавершённого оборота «в лице»; завершение определяется последующим ролевым маркером либо структурным `, и [юридическое лицо] <ОПФ>`. Эвристика хрупка на границах предложений, но все воспроизведённые остаточные отказы — видимого класса. Дополнительно проверены вне экстрактора: все 16 родительных форм, заголовки экспорта, проброс `error_message` (сохранённое значение, значение по умолчанию None, поле необязательное) и интеграционное покрытие образца 03."
+  },
+  {
+    "id": "F1-B1-Ф5",
+    "reviewer": "opus-review",
+    "decision": "VERIFIED",
+    "authorized_change": "CANNOT_VERIFY: `npm run build` (план Ф5 шаг 6 и критерий приёмки) не запускался имплементером, потому что next build переписывает frontend/tsconfig.json. Ревьюер предложил исполнимую форму проверки с копированием и восстановлением tsconfig.json.",
+    "materiality": "NONE",
+    "status": "verified-by-controller",
+    "note": "Оркестратор исполнил CHECK буквально: cp tsconfig.json в бэкап → npm run build → восстановление → git status --porcelain -- tsconfig.json. Результат совпал с EXPECT: код возврата 0, вывод git status пуст. Сборка прошла («Compiled successfully», 4 статические страницы, 6 маршрутов). Next.js, как и ожидалось, попытался дописать в tsconfig.json '.next/types/**/*.ts', и восстановление это откатило."
+  },
+  {
+    "id": "F1-B2-Ф5",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "frontend/app/documents/[id]/analysis/page.tsx:91-96 — ссылка «Загрузить другой документ» на экране ошибки выходит за букву плана, и Non-goals плана исключают изменения дизайна пяти экранов. Ревьюер не блокирует: это статический <a href=\"/\"> без состояния, без вызовов API и без влияния на машину состояний, и он закрывает собственный приоритет ревью — «на неизвестном/терминальном статусе пользователь должен видеть действие»; без него единственный выход из failed-документа — кнопка «назад» в браузере. Удаление стоит один элемент <a> плюс финальное утверждение теста frontend/__tests__/AnalysisPage.test.tsx:166.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B3-Ф5",
+    "reviewer": "opus-review",
+    "decision": "DEFER",
+    "authorized_change": "frontend/app/documents/[id]/analysis/page.tsx:154-158 — строка «Метрики анализа … недоступны». Ближе к завершению собственного изменения фазы, чем к лишней функции: до этого диффа статусы built/exported вообще не доходили до ветки отчёта, а `preflight_metrics: null` достижим для терминального документа, поэтому иначе фаза вводила бы экран с одним заголовком и кнопкой. Поведение, навигацию и контракт не трогает.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F1-B4-Ф5",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "frontend/app/documents/[id]/analysis/page.tsx:91-92 — это единственный <a> во всём фронтенде; вся остальная навигация идёт через router.push. Сырой якорь даёт полную перезагрузку документа и ломает идиому.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B5-Ф5",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "frontend/app/documents/[id]/analysis/page.tsx:71 — `(e as Error).message` подставляет англоязычную строку браузера («Failed to fetch») под русский заголовок при сетевом сбое, а бросок не-Error отрендерит пустой <p>. Совпадает с домашним паттерном в protocol/page.tsx:126, поэтому это консистентность, а не регрессия.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B6-Ф5",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "frontend/lib/api.ts:24 — у текстового fallback нет ограничения длины, поэтому HTML-страница краха или трейс прокси попадут в абзац ошибки целиком. Правило «{status} {text}» предписано планом, продукт локальный, поэтому это не дефект диффа.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B7-Ф5",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "frontend/__tests__/AnalysisPage.test.tsx:19 дублирует POLL_INTERVAL_MS из page.tsx:30. Если интервал страницы вырастет, ожидание в 1250 мс тихо перестанет что-либо доказывать и тест терминального статуса станет ложно проходящим.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B8-Ф5",
+    "reviewer": "opus-review",
+    "decision": "NIT",
+    "authorized_change": "page.tsx:78-81 — новая очистка clearTimeout это единственное изменение поведения без теста. Корректна по чтению, но тест на число запросов при размонтировании посреди опроса был бы самым дешёвым из одиннадцати.",
+    "materiality": "NONE",
+    "status": "nit"
+  },
+  {
+    "id": "F1-B9-Ф5",
+    "reviewer": "codex-control-review",
+    "decision": "DEFER",
+    "authorized_change": "frontend/lib/api.ts:24 — валидное JSON-скалярное тело ошибки (строка, число, null) не является объектом, поэтому `detail` из него не извлекается и тело показывается целиком через fallback `${status} ${body}`. Контрольное ревью само отмечает, что текущий FastAPI-контракт таких ответов не порождает: это дальнейшее усиление обработки недоверенных ответов, а не дефект диффа.",
+    "materiality": "NONE",
+    "status": "deferred"
+  },
+  {
+    "id": "F9-PROC-Ф4",
+    "reviewer": "orchestrator",
+    "decision": "VERIFIED",
+    "authorized_change": "Процессная запись, а не находка в коде. Задание на фикс-раунд 9 содержало реконструкцию входной преамбулы, сделанную оркестратором: представитель был записан как «Государственного унитарного предприятия «МГЦАЖ»» — полная организационно-правовая форма в родительном падеже. Дефект на ней не воспроизводился, и имплементер остановился со статусом NEEDS_CONTEXT вместо того, чтобы применить правку по описанию.",
+    "materiality": "NONE",
+    "status": "verified-by-controller",
+    "note": "Причина выяснена отдельным прогоном: `ENTITY_PREFIXES` содержит только именительный падеж полных форм плюс аббревиатуры, а `re.IGNORECASE` падежи не сворачивает, поэтому представитель в родительном падеже вообще не становился кандидатом-сущностью. С аббревиатурой `ГУП «МГЦАЖ»` дефект воспроизводился, и проверка показала его на пяти входах из шести. Находка была настоящей, ошибочной была только реконструкция входа. Правило «не воспроизвёлся RED — остановись и доложи NEEDS_CONTEXT», вписанное во все фикс-задания начиная с пятого раунда, сработало именно так, как задумано: без него правка легла бы на код, где на предъявленной строке ничего не ломалось, и дала бы зелёный результат, ничего не доказывающий."
+  },
+  {
+    "id": "FINAL-B1",
+    "reviewer": "opus-final-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/processing/numbering_resolver.py:432-443 — если снимок `w:pPr` внутри `w:pPrChange` не содержит `w:numPr` (и нумерованного `w:pStyle`) у абзаца, который нумеруется штатно, абзац теряет исходный номер И не расходует счётчик, поэтому все последующие пункты смещаются на один номер вниз. Замерено на четырёх собранных вручную пакетах: нормальная форма Word (снимок повторяет `numPr`) даёт `1./2./3./4.` верно; пустой снимок и снимок только с `jc` дают `1./—/2./3.` при уверенности 0.95.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Обе неверно читаемые формы XML ревьюер сконструировал сам и не смог показать производителя, который их выпускает; для реалистичного прочтения пустого снимка («нумерация ДОБАВЛена правкой») текущий вывод верен. Это прямое и добросовестное следствие решения владельца по F2-B6-Ф3, поэтому вопрос не переоткрывается — записано лишь потому, что смещение последующей нумерации не замерял ни один пофазный ревьюер."
+  },
+  {
+    "id": "FINAL-B2",
+    "reviewer": "opus-final-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/services/protocol_generator.py:152-157 — строковая `confidence` протокола никогда не отражает настоящую уверенность нумерации из Ф3. `_confidence()` возвращает 0.95, если у пункта нет флага `MULTI_PARAGRAPH` или `LOW_NUMBERING_CONFIDENCE`, а `LOW_NUMBERING_CONFIDENCE` как флаг ПУНКТА не выставляется нигде в `backend/app` — есть только два читателя (`validation_engine.py:86`, `protocol_generator.py:155`). Замерено: у образца 01 настоящее среднее 0.4 и каждый номер угадан регуляркой с уверенностью 0.7, но все три строки протокола рапортуют 0.95.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Логика существовала до плана и вне его критериев приёмки — они говорят только про `numbering_confidence_mean`. Самая ценная находка финального ревью: её структурно не мог увидеть ни один пофазный ревьюер, потому что производитель флага и его потребитель лежат в разных фазах."
+  },
+  {
+    "id": "FINAL-B3",
+    "reviewer": "opus-final-review",
+    "decision": "DEFER",
+    "authorized_change": "README.md:181 — пункт непосредственно над переписанной этой веткой инструкцией о сбросе базы обещает, что зависший документ переходит в `failed` «с текстом ошибки в `/analysis`». Замерено на до-Ф3 базе без сброса: статус остаётся `parsing`, `error_message` равен `null`.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "Сторона кода — уже записанное отложение F1-B5-Ф3, оно не переоткрывается; отмечено только соседнее предложение документации, ставшее противоречивым."
+  },
+  {
+    "id": "FINAL-B4",
+    "reviewer": "opus-final-review",
+    "decision": "DEFER",
+    "authorized_change": "backend/app/api/protocols.py:194-221 — устаревшая ветка `build_protocol` недостижима, что эмпирически подтверждает отложение F1-B2-Ф3. `clauses.paragraphs_json` объявлена `nullable=False` со значением по умолчанию `list`, поэтому значение никогда не бывает `None`, а пункт с `[]` восстанавливает ноль абзацев, и его `original_text`/`accepted_text` до строки не доходят.",
+    "materiality": "NONE",
+    "status": "deferred",
+    "note": "В продуктиве безвредно — `[]` сохраняется только у пунктов без абзацев, — но запасной путь с синтетическим абзацем является мёртвым кодом."
+  },
+  {
+    "id": "FINAL-VERDICT",
+    "reviewer": "opus-final-review",
+    "decision": "VERIFIED",
+    "authorized_change": "Финальное ревью всей ветки `c6d4ea6..f42d267` вернуло REVIEW_OK. Пять фаз именно составляются, а не просто сосуществуют: Ф2 переиспользует `_paragraph_revision` из Ф1 для абзацев ячеек, не ослабляя контракт format-only; Ф3 накладывает `exists_in_original` и исходные поля `pPr` на ту же запись, не трогая редакции таблиц из Ф2; Ф4 и Ф5 ложатся сверху с `error_message` как единственным изменением ответа.",
+    "materiality": "NONE",
+    "status": "verified-by-controller",
+    "note": "Проверено исполнением: все пять инвариантов на собранном дереве, включая отсутствующий в корпусе случай форматной правки ячейки; сквозной прогон образца 03 через реальные SQLite и файловое хранилище с совпадением данных всех трёх бэкенд-фаз одновременно и побайтово одинаковой повторной сборкой; все десять строк `samples/README.md` против фактического поведения; `clauses.paragraphs_json` — единственное изменение схемы во всей ветке, инструкция про `rm -rf backend/data` достаточна; ни один файл манифеста зависимостей не тронут, все пины на месте. Отдельно отмечено, что Ф3 попутно закрыла отложенное расхождение докстроки `tables_json` из Ф2, когда приняла владение `clause.py`."
+  }
+]

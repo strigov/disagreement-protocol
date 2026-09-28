@@ -1,12 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import type { AnalysisOut, Protocol, ProtocolRow, ValidationReport } from "@/lib/types";
-import ProtocolTable from "@/components/ProtocolTable";
+import { Download, CircleCheck, TriangleAlert, LoaderCircle, Check, FileText } from "lucide-react";
+import { WorkspaceShell } from "@/components/WorkspaceShell";
+import { ExportDialog } from "@/components/ExportDialog";
+import ProtocolTable, { type ProtocolTableHandle, type SaveState } from "@/components/ProtocolTable";
 
-export default function ProtocolPage({ params }: { params: { id: string } }) {
+export default function ProtocolPage() {
+  const params = useParams<{ id: string }>();
+  const tableRef = useRef<ProtocolTableHandle>(null);
+  const operation = useRef(false);
+  const analysisVersion = useRef(0);
+  const [busy, setBusy] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const [protocol, setProtocol] = useState<Protocol | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisOut | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +39,7 @@ export default function ProtocolPage({ params }: { params: { id: string } }) {
     (async () => {
       try {
         const existing = await api.listProtocolsForDocument(params.id);
+        if (cancelled) return;
         const proto =
           existing.length > 0
             ? await api.getProtocolRows(existing[0].id)
@@ -36,10 +49,11 @@ export default function ProtocolPage({ params }: { params: { id: string } }) {
         // Fetch analysis AFTER the protocol settles so the validation
         // report (written during build) is visible on first paint.
         try {
+          const version = ++analysisVersion.current;
           const a = await api.getAnalysis(params.id);
-          if (!cancelled) setAnalysis(a);
+          if (!cancelled && version === analysisVersion.current) setAnalysis(a);
         } catch {
-          /* non-fatal — banner just won't render */
+          if (!cancelled) setOperationError("Не удалось получить проверку полноты. Повторите действие после восстановления связи.");
         }
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
@@ -51,160 +65,118 @@ export default function ProtocolPage({ params }: { params: { id: string } }) {
   }, [params.id]);
 
   const refreshAnalysis = async () => {
+    const version = ++analysisVersion.current;
     try {
       const a = await api.getAnalysis(params.id);
-      setAnalysis(a);
+      if (version === analysisVersion.current) setAnalysis(a);
     } catch {
-      /* ignore */
+      if (version === analysisVersion.current) {
+        setAnalysis((current) => current && ({ ...current, validation_report: null }));
+        setOperationError("Строки сохранены, но проверка полноты недоступна. Повторите действие после восстановления связи.");
+      }
     }
   };
 
   const patch = async (rowId: string, body: Partial<ProtocolRow>) => {
     if (!protocol) return;
-    // Rethrow on failure so ProtocolTable can keep the user's pending draft
-    // visible (data-loss prevention: a swallowed error here would discard
-    // edited text the moment the cell exits edit mode). We deliberately do
-    // NOT call setError() — promoting a single-cell PATCH failure to the
-    // page-level error UI would unmount the table and lose every other
-    // unsaved draft along with it.
     const updated = await api.patchRow(protocol.id, rowId, body);
-    // Functional update: two PATCHes on different cells of the same row can be
-    // in flight simultaneously. Using a snapshot-based setState here would let
-    // whichever response lands last clobber the other cell's just-saved value
-    // with a stale row from before the concurrent edit. Merging from the
-    // freshest state and only overriding the field(s) actually patched keeps
-    // both writes visible.
     setProtocol((cur) => {
       if (!cur) return cur;
       return {
         ...cur,
-        rows: cur.rows.map((r) => (r.id === rowId ? { ...r, ...updated } : r)),
+        rows: cur.rows.map((r) => (r.id === rowId ? { ...r, ...body, flags: updated.flags, user_edited: updated.user_edited } : r)),
       };
     });
+    await refreshAnalysis();
   };
 
-  const merge = async (rowId: string, direction: "previous" | "next") => {
-    if (!protocol) return;
+  // Structural operations and navigation wait for every draft and pending PATCH.
+  // The synchronous gate also covers double clicks before React disables buttons.
+  const perform = async (action: () => Promise<void>, refresh = true) => {
+    if (operation.current) return;
+    operation.current = true;
+    setBusy(true);
+    setOperationError(null);
     try {
-      await api.patchRow(protocol.id, rowId, { merge_with: direction });
-      // Reload rows after merge — use the read endpoint, NOT buildProtocol,
-      // to avoid wiping the just-merged state.
-      const fresh = await api.getProtocolRows(protocol.id);
-      setProtocol(fresh);
-    } catch (e) {
-      setError((e as Error).message);
+      if (!await tableRef.current?.saveAll()) {
+        setOperationError("Изменения не сохранены. Исправьте ошибку или отмените правку перед продолжением.");
+        return;
+      }
+      await action();
+      if (refresh) await refreshAnalysis();
+    } catch (error) {
+      setOperationError((error as Error).message);
+    } finally {
+      operation.current = false;
+      setBusy(false);
     }
   };
 
-  const remove = async (rowId: string) => {
+  const merge = (rowId: string, direction: "previous" | "next") => perform(async () => {
     if (!protocol) return;
-    try {
-      await api.deleteRow(protocol.id, rowId);
-      setProtocol({ ...protocol, rows: protocol.rows.filter((r) => r.id !== rowId) });
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
+    const updated = await api.patchRow(protocol.id, rowId, { merge_with: direction });
+    setProtocol((current) => current && ({
+      ...current,
+      rows: current.rows.filter((row) => row.id !== rowId)
+        .map((row, index) => ({ ...(row.id === updated.id ? updated : row), sort_order: index })),
+    }));
+    tableRef.current?.revealRow(updated.id);
+  });
 
-  const addRow = async () => {
+  const remove = (rowId: string) => perform(async () => {
     if (!protocol) return;
-    try {
-      const created = await api.addRow(protocol.id);
-      setProtocol({ ...protocol, rows: [...protocol.rows, created] });
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
+    await api.deleteRow(protocol.id, rowId);
+    setProtocol((current) => current && ({
+      ...current,
+      rows: current.rows.filter((row) => row.id !== rowId).map((row, index) => ({ ...row, sort_order: index })),
+    }));
+  });
 
-  const swap = async () => {
+  const addRow = () => perform(async () => {
     if (!protocol) return;
-    try {
-      const updated = await api.swapParties(protocol.id);
-      setProtocol(updated);
-      await refreshAnalysis();
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
+    const created = await api.addRow(protocol.id);
+    setProtocol((current) => current && ({ ...current, rows: [...current.rows, created] }));
+    tableRef.current?.revealRow(created.id);
+  });
 
-  if (error) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-8" role="alert">
-        <h1 className="mb-2 text-2xl font-semibold">Не удалось загрузить протокол</h1>
-        <p className="text-red-600">{error}</p>
-      </main>
-    );
-  }
+  const swap = () => perform(async () => {
+    if (!protocol) return;
+    const updated = await api.swapParties(protocol.id);
+    setProtocol(updated);
+    setAnalysis(null);
+  });
 
-  if (!protocol) {
-    return (
-      <main className="mx-auto max-w-3xl px-4 py-8" aria-busy="true">
-        <p className="text-gray-600">Строим таблицу…</p>
-      </main>
-    );
-  }
+  if (error) return <WorkspaceShell step={3} documentId={params.id}><div className="notice notice-error" role="alert"><h1 className="text-xl font-semibold mb-2">Не удалось загрузить протокол</h1><p>{error}</p></div></WorkspaceShell>;
+  if (!protocol) return <WorkspaceShell step={3} documentId={params.id}><div className="loading-state" aria-busy="true"><LoaderCircle className="spinner mx-auto mb-5 text-blue-600" size={28} /><p>Строим таблицу…</p></div></WorkspaceShell>;
 
   const report: ValidationReport | null = analysis?.validation_report ?? null;
-  const uncovered = report
-    ? Math.max(0, report.textual_revisions_total - report.covered_revisions)
-    : 0;
-  const warningCount = report?.warnings.length ?? 0;
-
+  const uncovered = report ? Math.max(0, report.textual_revisions_total - report.covered_revisions) : 0;
+  const diagnostics = analysis?.preflight_diagnostics ?? [];
+  const warningCount = (report?.warnings.length ?? 0) + diagnostics.length;
   const draftingParty = analysis?.parties.find((p) => p.id === analysis?.drafting_party_id);
   const counterparty = analysis?.parties.find((p) => p.id !== analysis?.drafting_party_id);
-
+  const saveLabel = { saved: "Все изменения сохранены", dirty: "Есть несохранённые изменения", saving: "Сохраняем изменения…", error: "Не удалось сохранить изменения" }[saveState];
   return (
-    <main className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Протокол разногласий</h1>
-        {analysis?.contract_name && (
-          <p className="text-sm text-gray-500">{analysis.contract_name}</p>
-        )}
+    <WorkspaceShell wide step={3} documentId={params.id} onNavigate={(href) => { void perform(async () => { router.push(href); }, false); }}>
+      <header className="document-heading">
+        <div><div className="eyebrow">Рабочее пространство договора</div><h1>Протокол разногласий</h1>
+          {analysis?.contract_name && <p className="document-name flex gap-1.5"><FileText size={14} className="shrink-0 mt-0.5" />{analysis.contract_name}</p>}
+          <div className="document-meta"><span>Наша сторона: <strong className="font-medium">{draftingParty?.name || draftingParty?.role || "загружаем…"}</strong></span><span className="meta-separator" /><span className={`save-indicator ${saveState === "error" ? "!text-red-600" : saveState === "dirty" ? "!text-amber-700" : ""}`} aria-live="polite">{saveState === "saving" ? <LoaderCircle size={12} className="spinner" /> : saveState === "saved" ? <Check size={12} /> : <TriangleAlert size={12} />}{saveLabel}</span></div>
+        </div>
+        <button type="button" className="btn btn-primary" disabled={busy} aria-busy={busy || undefined} aria-label="Экспорт DOCX" onClick={() => { void perform(async () => { setExportOpen(true); }, false); }}><Download size={15} /> Скачать DOCX</button>
       </header>
-
-      {(uncovered > 0 || warningCount > 0) && report && (
-        <section
-          role="status"
-          aria-live="polite"
-          className="space-y-2 rounded border border-yellow-300 bg-yellow-50 p-4 text-sm text-yellow-900"
-        >
-          <div className="font-medium">Проверьте перед экспортом:</div>
-          {uncovered > 0 && (
-            <div>
-              Не покрыто правок: <strong>{uncovered}</strong> из {report.textual_revisions_total}.
-            </div>
-          )}
-          {warningCount > 0 && (
-            <ul className="list-inside list-disc">
-              {report.warnings.slice(0, 5).map((w, i) => (
-                <li key={i}>{w.message}</li>
-              ))}
-              {warningCount > 5 && <li>и ещё {warningCount - 5}…</li>}
-            </ul>
-          )}
-        </section>
-      )}
-
-      <ProtocolTable
-        rows={protocol.rows}
-        counterpartyRole={counterparty?.role ?? ""}
-        draftingRole={draftingParty?.role ?? ""}
-        onPatch={patch}
-        onMerge={merge}
-        onDelete={remove}
-        onAddRow={addRow}
-        onSwapParties={swap}
-      />
-
-      <div className="flex justify-end pt-2">
-        <button
-          type="button"
-          onClick={() => router.push(`/documents/${params.id}/export`)}
-          className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-300"
-        >
-          Экспорт DOCX
-        </button>
-      </div>
-    </main>
+      <section className={`coverage-strip ${uncovered > 0 || warningCount > 0 ? "has-warnings" : ""}`} aria-label="Проверка полноты">
+        {uncovered > 0 || warningCount > 0 ? <TriangleAlert size={16} className="shrink-0" /> : <CircleCheck size={16} className="shrink-0" />}
+        <span>{report ? <>{uncovered > 0 ? <>Не покрыто правок: <strong>{uncovered}</strong> из {report.textual_revisions_total}.</> : <>Все текстовые правки учтены: <strong>{report.covered_revisions}</strong> из {report.textual_revisions_total}.</>}{warningCount > 0 && <> Замечаний: <strong>{warningCount}</strong>.</>}</> : "Проверка полноты пока недоступна."}</span>
+        <button type="button" onClick={() => setDetailsOpen(!detailsOpen)} aria-expanded={detailsOpen} aria-controls="validation-details">{detailsOpen ? "Скрыть" : "Подробнее"}</button>
+      </section>
+      {detailsOpen && <div id="validation-details" className="notice mb-5"><p>Проверка полноты показывает, учтены ли исходные правки. Юридическую корректность редакций вы проверяете самостоятельно.</p>{report?.warnings.length ? <ul className="list-disc pl-4 mt-3 space-y-1">{report.warnings.map((warning, index) => <li key={index}>{warning.message}</li>)}</ul> : null}{diagnostics.length > 0 && <ul className="list-disc pl-4 mt-3 space-y-1">{diagnostics.map((item, index) => <li key={index}>{item.message}</li>)}</ul>}{!report && <button className="btn btn-secondary mt-3" onClick={() => void refreshAnalysis()}>Повторить проверку</button>}</div>}
+      {operationError && <p role="alert" className="notice notice-error mb-5">{operationError}</p>}
+      <ProtocolTable ref={tableRef} busy={busy} rows={protocol.rows} initialMode="focus" storageKey={protocol.id}
+        reviewContext={analysis?.drafting_party_id ?? ""} warnings={report?.warnings ?? []} onSaveStateChange={setSaveState}
+        counterpartyRole={counterparty?.role ?? ""} draftingRole={draftingParty?.role ?? ""}
+        onPatch={patch} onMerge={merge} onDelete={remove} onAddRow={addRow} onSwapParties={swap} />
+      {exportOpen && <ExportDialog documentId={params.id} contractName={analysis?.contract_name} rowCount={protocol.rows.length} onClose={() => setExportOpen(false)} />}
+    </WorkspaceShell>
   );
 }

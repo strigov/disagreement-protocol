@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from app.api.protocols import _restore_paragraph
+from app.services.clause_codec import restore_clause, serialize_clause
 from app.processing.types import Clause as ClauseData
 from app.processing.validation_engine import ValidationEngine
 from app.services.exporter import ProtocolExporter
@@ -19,55 +19,9 @@ def _sample_bytes(filename: str) -> bytes:
     return (SAMPLES_DIR / filename).read_bytes()
 
 
-def _serialize_paragraph_for_clause_model(paragraph) -> dict:
-    return {
-        "block_id": paragraph.block_id,
-        "text_runs": paragraph.text_runs,
-        "num_id": paragraph.num_id,
-        "ilvl": paragraph.ilvl,
-        "original_text": paragraph.original_text,
-        "accepted_text": paragraph.accepted_text,
-        "revisions": [
-            {
-                "type": revision.type,
-                "text": revision.text,
-                "author": revision.author,
-            }
-            for revision in paragraph.revisions
-        ],
-        "rendered_number": paragraph.rendered_number,
-        "numbering_confidence": paragraph.numbering_confidence,
-        "numbering_level": paragraph.numbering_level,
-    }
-
-
 def _restore_clauses_from_persisted_paragraphs(result) -> list[ClauseData]:
-    restored_clauses = []
-    for clause in result["clauses"]:
-        restored_clause = ClauseData(
-            clause_key=clause.clause_key,
-            label=clause.label,
-            level=clause.level,
-            parent_key=clause.parent_key,
-        )
-        restored_clause.flags = set(clause.flags)
-        paragraph_confidences = [
-            paragraph.numbering_confidence for paragraph in clause.paragraphs
-        ]
-        fallback_confidence = (
-            sum(paragraph_confidences) / len(paragraph_confidences)
-            if paragraph_confidences
-            else 0.0
-        )
-        for paragraph in clause.paragraphs:
-            restored_clause.paragraphs.append(
-                _restore_paragraph(
-                    _serialize_paragraph_for_clause_model(paragraph),
-                    fallback_confidence=fallback_confidence,
-                ),
-            )
-        restored_clauses.append(restored_clause)
-    return restored_clauses
+    return [restore_clause(serialize_clause(clause, None, i))
+            for i, clause in enumerate(result["clauses"])]
 
 
 def test_sample_09_xml_comment_reaches_pipeline_result():
@@ -152,14 +106,14 @@ def test_sample_01_regex_numbering_has_no_per_paragraph_low_confidence_noise():
     )
 
 
-def test_sample_02_preserves_deleted_numbers_and_does_not_number_inserted_clause():
+def test_sample_02_preserves_deleted_numbers_and_uses_accepted_number_for_insertion():
     result = run_pipeline(_sample_bytes("02_medium_auto_numbering.docx"))
     rows = ProtocolRowBuilder().build(
         result["changed_clauses"],
         BuildContext(drafting_party_role="Арендатор", counterparty_role="Арендодатель"),
     )
 
-    assert [row.point_label for row in rows] == ["1.1.", "Новый пункт 1", "2.1.", "2.2."]
+    assert [row.point_label for row in rows] == ["1.1.", "1.3.", "2.1.", "2.2."]
     assert next(row for row in rows if "DELETED_CLAUSE" in row.flags).point_label == "2.2."
     assert not any(row.point_label == "2.3." for row in rows)
 
@@ -186,7 +140,8 @@ def test_sample_10_uses_original_number_for_changed_clause_and_new_label_for_ins
         BuildContext(drafting_party_role="Поставщик", counterparty_role="Покупатель"),
     )
 
-    assert [row.point_label for row in rows] == ["Новый пункт 1", "1.2."]
-    changed_row = next(row for row in rows if row.point_label == "1.2.")
+    assert [row.point_label for row in rows] == ["1.2.", "1.2."]
+    assert "NEW_CLAUSE" in rows[0].flags
+    changed_row = next(row for row in rows if "NEW_CLAUSE" not in row.flags)
     assert "14 календарных дней" in changed_row.party_1_text
     assert "7 календарных дней" in changed_row.party_2_text

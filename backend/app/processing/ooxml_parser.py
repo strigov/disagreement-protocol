@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import zipfile
-from io import BytesIO
+from dataclasses import replace
 
 from lxml import etree
+
+from app.processing.docx_package import DocxPackage
 
 from app.processing.types import (
     RawDocument,
@@ -11,6 +12,7 @@ from app.processing.types import (
     RawTable,
     RawTableCell,
     RawTableRow,
+    RevisionRecord,
     Run,
 )
 
@@ -19,33 +21,38 @@ NS = {"w": W_NS}
 
 
 class OOXMLParser:
-    def parse(self, data: bytes) -> RawDocument:
-        with zipfile.ZipFile(BytesIO(data)) as z:
-            with z.open("word/document.xml") as f:
-                tree = etree.parse(f)
-        body = tree.getroot().find(f"{{{W_NS}}}body")
+    def parse(self, data: bytes | DocxPackage) -> RawDocument:
+        if not isinstance(data, DocxPackage):
+            with DocxPackage(data) as package:
+                return self.parse(package)
+        root = data.xml("word/document.xml")
+        body = root.find(f"{{{W_NS}}}body")
         if body is None:
             raise ValueError("OOXML document.xml does not contain a WordprocessingML body")
         blocks: list = []
         p_idx = 0
         t_idx = 0
         block_idx = 0
-        for child in self._iter_block_children(body):
+        for child in self._iter_block_children(body, data):
             tag = etree.QName(child.tag).localname
             if tag == "p":
                 p_idx += 1
                 blocks.append(
-                    self._parse_paragraph(child, f"p_{p_idx:04d}", is_in_table=False)
+                    replace(
+                        self._parse_paragraph(child, f"p_{p_idx:04d}", is_in_table=False, package=data),
+                        block_index=block_idx,
+                    )
                 )
                 block_idx += 1
             elif tag == "tbl":
                 t_idx += 1
-                blocks.append(self._parse_table(child, f"t_{t_idx:04d}", block_idx))
+                blocks.append(self._parse_table(child, f"t_{t_idx:04d}", block_idx, data))
                 block_idx += 1
+        data.check_budget()
         return RawDocument(blocks=tuple(blocks))
 
-    def _iter_block_children(self, elem):
-        for child in elem:
+    def _iter_block_children(self, elem, package: DocxPackage):
+        for child in package.checked(elem):
             if not isinstance(child.tag, str):
                 continue
             tag = etree.QName(child.tag).localname
@@ -54,7 +61,7 @@ class OOXMLParser:
             elif tag == "sdt":
                 content = child.find(f"{{{W_NS}}}sdtContent")
                 if content is not None:
-                    yield from self._iter_block_children(content)
+                    yield from self._iter_block_children(content, package)
                 elif self._contains_block_children(child):
                     raise ValueError(
                         "w:sdt missing w:sdtContent but contains block-level content"
@@ -70,11 +77,13 @@ class OOXMLParser:
             or elem.find(f".//{{{W_NS}}}tbl") is not None
         )
 
-    def _parse_paragraph(self, p_elem, block_id: str, is_in_table: bool) -> RawParagraph:
+    def _parse_paragraph(self, p_elem, block_id: str, is_in_table: bool, package: DocxPackage) -> RawParagraph:
         runs: list[Run] = []
-        for r in p_elem.iter(f"{{{W_NS}}}r"):
+        adjacent_parts: list[str] = []
+        previous_style: tuple[bool, bool] | None = None
+        for r in package.checked(p_elem.iter(f"{{{W_NS}}}r")):
             text_parts: list[str] = []
-            for t in r.iter():
+            for t in package.checked(r.iter()):
                 if not isinstance(t.tag, str):
                     continue
                 local = etree.QName(t.tag).localname
@@ -90,10 +99,15 @@ class OOXMLParser:
             rpr = r.find(f"{{{W_NS}}}rPr")
             bold = rpr is not None and rpr.find(f"{{{W_NS}}}b") is not None
             italic = rpr is not None and rpr.find(f"{{{W_NS}}}i") is not None
-            if runs and runs[-1].bold == bold and runs[-1].italic == italic:
-                runs[-1] = Run(text=runs[-1].text + txt, bold=bold, italic=italic)
-            else:
-                runs.append(Run(text=txt, bold=bold, italic=italic))
+            style = (bold, italic)
+            if previous_style is not None and style != previous_style:
+                runs.append(Run(text="".join(adjacent_parts), bold=previous_style[0], italic=previous_style[1]))
+                adjacent_parts = []
+            adjacent_parts.append(txt)
+            previous_style = style
+        if previous_style is not None:
+            runs.append(Run(text="".join(adjacent_parts), bold=previous_style[0], italic=previous_style[1]))
+        package.check_budget()
         ppr = p_elem.find(f"{{{W_NS}}}pPr")
         num_id = None
         ilvl = None
@@ -119,18 +133,23 @@ class OOXMLParser:
             is_in_table=is_in_table,
         )
 
-    def _parse_table(self, tbl_elem, block_id: str, block_index: int) -> RawTable:
-        has_revisions = (
-            tbl_elem.find(f".//{{{W_NS}}}ins") is not None
-            or tbl_elem.find(f".//{{{W_NS}}}del") is not None
+    def _parse_table(self, tbl_elem, block_id: str, block_index: int, package: DocxPackage) -> RawTable:
+        if tbl_elem.find(f".//{{{W_NS}}}cellMerge") is not None:
+            raise ValueError(
+                "Правки объединения ячеек Word (w:cellMerge) не поддерживаются. "
+                "Примите или отклоните эту правку в Word перед загрузкой."
+            )
+        has_revisions = any(
+            tbl_elem.find(f".//{{{W_NS}}}{tag}") is not None
+            for tag in ("ins", "del", "moveFrom", "moveTo", "cellIns", "cellDel")
         )
         rows: list[RawTableRow] = []
         cell_p_counter = 0
-        for tr in tbl_elem.findall(f"{{{W_NS}}}tr"):
+        for tr in package.checked(tbl_elem.findall(f"{{{W_NS}}}tr")):
             cells: list[RawTableCell] = []
-            for tc in tr.findall(f"{{{W_NS}}}tc"):
+            for tc in package.checked(tr.findall(f"{{{W_NS}}}tc")):
                 cell_paragraphs: list[RawParagraph] = []
-                for p in self._iter_block_children(tc):
+                for p in self._iter_block_children(tc, package):
                     if etree.QName(p.tag).localname != "p":
                         raise ValueError(
                             "OOXML table cells containing nested w:tbl are not supported"
@@ -138,13 +157,38 @@ class OOXMLParser:
                     cell_p_counter += 1
                     cell_pid = f"{block_id}_p_{cell_p_counter:04d}"
                     cell_paragraphs.append(
-                        self._parse_paragraph(p, cell_pid, is_in_table=True)
+                        self._parse_paragraph(p, cell_pid, is_in_table=True, package=package)
                     )
-                cells.append(RawTableCell(paragraphs=tuple(cell_paragraphs)))
-            rows.append(RawTableRow(cells=tuple(cells)))
+                cell_changes = self._structural_changes(tc, "tcPr", "cellIns", "cellDel")
+                cells.append(RawTableCell(
+                    paragraphs=tuple(cell_paragraphs),
+                    exists_in_original=not any(r.type == "INS" for r in cell_changes),
+                    exists_in_accepted=not any(r.type == "DEL" for r in cell_changes),
+                    revisions=cell_changes,
+                ))
+            row_changes = self._structural_changes(tr, "trPr", "ins", "del")
+            rows.append(RawTableRow(
+                cells=tuple(cells),
+                exists_in_original=not any(r.type == "INS" for r in row_changes),
+                exists_in_accepted=not any(r.type == "DEL" for r in row_changes),
+                revisions=row_changes,
+            ))
         return RawTable(
             block_id=block_id,
             block_index=block_index,
             rows=tuple(rows),
             has_revisions=has_revisions,
         )
+
+    @staticmethod
+    def _structural_changes(elem, properties: str, inserted: str, deleted: str):
+        changes = []
+        for tag, revision_type in ((inserted, "INS"), (deleted, "DEL")):
+            change = elem.find(f"{{{W_NS}}}{properties}/{{{W_NS}}}{tag}")
+            if change is not None:
+                changes.append(RevisionRecord(
+                    type=revision_type, text="", author=change.get(f"{{{W_NS}}}author") or "",
+                ))
+        if len(changes) > 1:
+            raise ValueError("Противоречивые правки вставки и удаления строки или ячейки Word")
+        return tuple(changes)

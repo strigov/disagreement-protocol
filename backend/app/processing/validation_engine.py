@@ -52,11 +52,20 @@ class ValidationEngine:
                                             kind=code, scope="session"
         """
         textual = 0
+        covered = 0
         format_only = 0
         confidences: list[float] = []
         warnings: list[dict] = []
+        covered_keys = {
+            key
+            for row in protocol_rows
+            if (row.party_1_text or "").strip() or (row.party_2_text or "").strip()
+            for key in (row.source_clause_keys or [row.source_clause_key])
+            if key
+        }
 
         for clause in all_clauses:
+            before = textual
             for paragraph in clause.paragraphs:
                 for revision in paragraph.revisions:
                     if revision.type in ("INS", "DEL"):
@@ -67,12 +76,33 @@ class ValidationEngine:
                     confidences.append(paragraph.numbering_confidence)
             for table in clause.tables:
                 for row in table.rows:
+                    for revision in row.revisions:
+                        if revision.type in ("INS", "DEL"):
+                            textual += 1
+                        elif revision.type == "FORMAT_ONLY":
+                            format_only += 1
                     for cell in row.cells:
                         for revision in cell.revisions:
                             if revision.type in ("INS", "DEL"):
                                 textual += 1
                             elif revision.type == "FORMAT_ONLY":
                                 format_only += 1
+
+            if clause.clause_key in covered_keys:
+                covered += textual - before
+            elif textual > before:
+                warnings.append({
+                    "kind": "UNCOVERED_REVISIONS", "scope": "clause", "severity": "warning",
+                    "clause_key": clause.clause_key,
+                    "message": f"Правки пункта {clause.label} не представлены в протоколе ({textual - before})",
+                })
+            if "SOURCE_ORDER_UNAVAILABLE" in clause.flags:
+                warnings.append({
+                    "kind": "SOURCE_ORDER_UNAVAILABLE", "scope": "clause", "severity": "warning",
+                    "clause_key": clause.clause_key,
+                    "message": f"Порядок текста и таблиц пункта {clause.label} не сохранён в старой версии. "
+                               "Проверьте по исходному документу.",
+                })
 
             if "MULTI_PARAGRAPH" in clause.flags:
                 warnings.append(
@@ -115,8 +145,11 @@ class ValidationEngine:
                 {
                     "kind": "EMPTY_PROTOCOL",
                     "scope": "session",
-                    "severity": "info",
-                    "message": "В документе не найдено правок",
+                    "severity": "warning" if textual else "info",
+                    "message": (
+                        "Протокол пуст, хотя в исходном документе есть правки"
+                        if textual else "В документе не найдено текстовых правок"
+                    ),
                 },
             )
 
@@ -164,7 +197,7 @@ class ValidationEngine:
         return ValidationReport(
             textual_revisions_total=textual,
             format_only_revisions=format_only,
-            covered_revisions=textual,
+            covered_revisions=covered,
             numbering_confidence_mean=mean,
             warnings=warnings,
         )

@@ -2,6 +2,8 @@ import time
 import zipfile
 from io import BytesIO
 
+import pytest
+
 import app.processing.numbering_resolver as numbering_resolver
 from app.processing.numbering_resolver import NumberingResolver
 from app.processing.ooxml_parser import OOXMLParser
@@ -181,7 +183,7 @@ def test_inserted_paragraph_does_not_consume_original_counter_but_mark_on_existi
     )
     numbers, diags = _resolve(data)
 
-    assert [number.rendered_number for number in numbers] == ["1.", None, "2."]
+    assert [number.rendered_number for number in numbers] == ["1.", "2.", "2."]
     assert [number.numbering_level for number in numbers] == [0, 0, 0]
     assert not diags
 
@@ -215,7 +217,7 @@ def test_deleted_paragraph_mark_on_existing_text_advances_original_counter():
     assert [number.rendered_number for number in numbers] == ["1.", "2.", "3."]
 
 
-def test_inserted_paragraph_at_end_does_not_advance_counter():
+def test_inserted_paragraph_at_end_uses_accepted_counter():
     data = build_docx_with_native_numbering(
         [(0, "Исходный пункт"), (0, "Вставленный пункт")],
         content_revisions=[None, "INS"],
@@ -223,7 +225,7 @@ def test_inserted_paragraph_at_end_does_not_advance_counter():
     )
     numbers, _ = _resolve(data)
 
-    assert [number.rendered_number for number in numbers] == ["1.", None]
+    assert [number.rendered_number for number in numbers] == ["1.", "2."]
 
 
 def test_inserted_paragraph_does_not_consume_first_start_override():
@@ -245,10 +247,10 @@ def test_inserted_paragraph_does_not_consume_first_start_override():
     )
     numbers, _ = _resolve(data)
 
-    assert [number.rendered_number for number in numbers] == [None, "7."]
+    assert [number.rendered_number for number in numbers] == ["7.", "7."]
 
 
-def test_inserted_native_number_keeps_structural_level_without_rendered_number():
+def test_inserted_native_number_keeps_structural_level_and_accepted_number():
     data = build_docx_with_native_numbering(
         [(0, "Раздел"), (1, "Вставленный подпункт"), (1, "Исходный подпункт")],
         content_revisions=[None, "INS", None],
@@ -256,11 +258,74 @@ def test_inserted_native_number_keeps_structural_level_without_rendered_number()
     )
     numbers, _ = _resolve(data)
 
-    assert numbers[1].rendered_number is None
+    assert numbers[1].rendered_number == "1.1."
     assert numbers[1].numbering_level == 1
     assert numbers[1].source == "native"
     assert numbers[1].confidence == 0.95
     assert numbers[2].rendered_number == "1.1."
+
+
+def test_accepted_counters_skip_deletions_and_include_consecutive_insertions():
+    data = build_docx_with_native_numbering(
+        [(0, "Раздел"), (1, "Удалённый"), (1, "Новый А"), (1, "Новый Б"),
+         (1, "Существующий"), (0, "Новый раздел"), (1, "Новый подпункт"),
+         (0, "Следующий исходный раздел")],
+        content_revisions=[None, "DEL", "INS", "INS", None, "INS", "INS", None],
+    )
+    numbers, diags = _resolve(data)
+
+    assert [n.rendered_number for n in numbers] == [
+        "1.", "1.1.", "1.1.", "1.2.", "1.2.", "2.", "2.1.", "2.",
+    ]
+    assert not diags
+
+
+@pytest.mark.parametrize(("text", "mark", "expected"), [
+    ("", "DEL", "2."),
+    ("", "INS", "3."),
+    ("", None, "3."),
+    ("Сохранившийся текст", "DEL", "3."),
+])
+def test_accepted_counter_handles_empty_and_surviving_paragraph_marks(text, mark, expected):
+    data = build_docx_with_native_numbering(
+        [(0, "Исходный"), (0, text), (0, "Вставленный")],
+        content_revisions=[None, None, "INS"],
+        paragraph_mark_revisions=[None, mark, "INS"],
+    )
+    numbers, _ = _resolve(data)
+
+    assert numbers[-1].rendered_number == expected
+
+
+def test_insertions_use_current_style_while_existing_clauses_keep_original_numpr():
+    styles = f'''<w:styles xmlns:w="{W_NS}">
+      <w:style w:type="paragraph" w:styleId="Clause">
+        <w:pPr><w:numPr><w:ilvl w:val="1"/><w:numId w:val="1"/></w:numPr></w:pPr>
+      </w:style>
+    </w:styles>'''
+    data = build_docx_with_native_numbering(
+        [(0, "Раздел"), (None, "Перенумерованный"), (None, "Вставленный")],
+        style_ids=[None, "Clause", "Clause"], styles_xml=styles,
+        original_num_prs=[None, (1, 0), None],
+        content_revisions=[None, None, "INS"],
+    )
+    numbers, _ = _resolve(data)
+
+    assert [n.rendered_number for n in numbers] == ["1.", "2.", "1.2."]
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_inserted_numbers_share_document_output_budget(monkeypatch, native):
+    monkeypatch.setattr(numbering_resolver, "_MAX_DOCUMENT_RENDERED_CHARS", 4)
+    data = build_docx_with_native_numbering(
+        [(0, "Пункт")] * 3 if native else [(None, "1. Пункт")] * 3,
+        content_revisions=["INS"] * 3,
+    )
+    numbers, _ = _resolve(data)
+
+    assert [n.rendered_number for n in numbers] == (
+        ["1.", "2.", None] if native else ["1.", "1.", None]
+    )
 
 
 def test_ppr_change_uses_original_numpr_and_style_for_numbering():
@@ -508,14 +573,15 @@ def test_oversized_numbering_xml_is_skipped_before_model_materialization(monkeyp
     raw = OOXMLParser().parse(data)
     revision_map, _ = RevisionResolver().resolve(data, raw)
     parse_calls = 0
-    real_parse = numbering_resolver.etree.parse
+    real_parse = numbering_resolver.DocxPackage.xml
 
     def recording_parse(*args, **kwargs):
         nonlocal parse_calls
-        parse_calls += 1
+        if args[1] == "word/numbering.xml":
+            parse_calls += 1
         return real_parse(*args, **kwargs)
 
-    monkeypatch.setattr(numbering_resolver.etree, "parse", recording_parse)
+    monkeypatch.setattr(numbering_resolver.DocxPackage, "xml", recording_parse)
     nmap, _ = NumberingResolver().resolve(data, raw, revision_map)
     paragraph = next(block for block in raw.blocks if isinstance(block, RawParagraph))
 
@@ -547,15 +613,15 @@ def test_oversized_styles_xml_is_skipped_before_style_materialization(monkeypatc
     raw = OOXMLParser().parse(data)
     revision_map, _ = RevisionResolver().resolve(data, raw)
     style_parse_calls = 0
-    real_parse = numbering_resolver.etree.parse
+    real_parse = numbering_resolver.DocxPackage.xml
 
     def recording_parse(*args, **kwargs):
         nonlocal style_parse_calls
-        if getattr(args[0], "name", None) == "word/styles.xml":
+        if args[1] == "word/styles.xml":
             style_parse_calls += 1
         return real_parse(*args, **kwargs)
 
-    monkeypatch.setattr(numbering_resolver.etree, "parse", recording_parse)
+    monkeypatch.setattr(numbering_resolver.DocxPackage, "xml", recording_parse)
     nmap, _ = NumberingResolver().resolve(data, raw, revision_map)
     paragraph = next(block for block in raw.blocks if isinstance(block, RawParagraph))
 

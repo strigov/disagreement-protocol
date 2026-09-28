@@ -27,6 +27,9 @@ class ProtocolRow(Base):
     party_2_text: Mapped[str] = mapped_column(Text, default="")
     agreed_text: Mapped[str] = mapped_column(Text, default="")
     source_clause_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    source_clause_keys: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    # NULL identifies legacy rows; preserve their manual agreed text conservatively.
+    agreed_text_edited: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     confidence: Mapped[float] = mapped_column(Float, default=1.0)
     flags: Mapped[list[str]] = mapped_column(JSON, default=list)
     user_edited: Mapped[bool] = mapped_column(Boolean, default=False)

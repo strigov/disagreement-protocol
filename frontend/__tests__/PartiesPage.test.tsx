@@ -2,13 +2,19 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import PartiesPage from "@/app/documents/[id]/parties/page";
+import { TestRoute, useTestParams } from "./route-context";
 import { server } from "@/src/mocks/server";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push }),
+  useParams: () => useTestParams(),
 }));
+
+function RoutedPage({ params }: { params: { id: string } }) {
+  return <TestRoute id={params.id}><PartiesPage /></TestRoute>;
+}
 
 beforeEach(() => {
   push.mockClear();
@@ -46,7 +52,7 @@ test("loads existing parties, builds protocol when none exists, navigates", asyn
     }),
   );
 
-  render(<PartiesPage params={{ id: "doc-1" }} />);
+  render(<RoutedPage params={{ id: "doc-1" }} />);
 
   expect(screen.getByText("Загружаем…")).toBeInTheDocument();
 
@@ -85,7 +91,7 @@ test("skips build if a protocol already exists", async () => {
     }),
   );
 
-  render(<PartiesPage params={{ id: "doc-1" }} />);
+  render(<RoutedPage params={{ id: "doc-1" }} />);
   await screen.findByText("Стороны договора");
   await userEvent.click(screen.getByRole("button", { name: "Построить протокол" }));
 
@@ -105,10 +111,10 @@ test("disables submit when party count is not exactly two and shows warning", as
     ),
   );
 
-  render(<PartiesPage params={{ id: "doc-9" }} />);
+  render(<RoutedPage params={{ id: "doc-9" }} />);
   await screen.findByText("Стороны договора");
 
-  expect(screen.getByText("MVP поддерживает ровно две стороны.")).toBeInTheDocument();
+  expect(screen.getByText("Для протокола нужны две стороны. Добавьте недостающую или удалите лишнюю.")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Построить протокол" })).toBeDisabled();
 });
 
@@ -119,7 +125,7 @@ test("surfaces fetch error", async () => {
     ),
   );
 
-  render(<PartiesPage params={{ id: "doc-err" }} />);
+  render(<RoutedPage params={{ id: "doc-err" }} />);
 
   await waitFor(() => expect(screen.getByText(/500 boom/)).toBeInTheDocument());
 });

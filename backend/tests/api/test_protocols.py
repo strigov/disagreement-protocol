@@ -339,7 +339,7 @@ def doc_with_paragraph_payload() -> Iterator[tuple[Document, FakeDb]]:
 
 def test_build_protocol_creates_rows(doc_with_changes):
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         assert r.status_code == 201, r.text
         body = r.json()
@@ -352,7 +352,7 @@ def test_build_protocol_creates_rows(doc_with_changes):
 
 
 def test_build_protocol_round_trips_versioned_and_legacy_table_cells(doc_with_versioned_table_cells):
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         response = client.post(f"/api/documents/{doc_with_versioned_table_cells.id}/protocol")
 
     assert response.status_code == 201, response.text
@@ -377,7 +377,7 @@ def test_build_protocol_restores_paragraph_payload_and_exact_confidence_mean(
 
     monkeypatch.setattr(ProtocolRowBuilder, "build", capture_build)
 
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         response = client.post(f"/api/documents/{doc.id}/protocol")
 
     assert response.status_code == 201, response.text
@@ -393,7 +393,7 @@ def test_build_protocol_restores_paragraph_payload_and_exact_confidence_mean(
 
 def test_patch_row_marks_user_edited(doc_with_changes):
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         row_id = proto["rows"][0]["id"]
@@ -410,7 +410,7 @@ def test_swap_parties_keeps_columns_and_updates_agreed_text(doc_with_changes):
     original-vs-accepted data, not to which party is currently drafting.
     """
     doc, p1, p2 = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         before = proto["rows"][0]
@@ -430,7 +430,7 @@ def test_swap_parties_preserves_user_edited_agreed_text(doc_with_changes):
     after a swap (we recompute only rows where user_edited == False).
     """
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         row_id = proto["rows"][0]["id"]
@@ -443,14 +443,10 @@ def test_swap_parties_preserves_user_edited_agreed_text(doc_with_changes):
         assert r2.json()["rows"][0]["agreed_text"] == "Согласовано вручную"
 
 
-def test_swap_parties_skips_user_edited_row_even_when_agreed_text_is_auto(doc_with_changes):
-    """A row marked user_edited=True (e.g. user changed point_label or
-    party_1_text but left agreed_text at the auto-generated value) keeps
-    its agreed_text after a swap -- we trust the explicit user_edited flag,
-    not a string comparison against the old auto-label.
-    """
+def test_swap_parties_updates_auto_agreed_after_other_column_edit(doc_with_changes):
+    """Editing another column must not freeze the generated agreed edition."""
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         row_id = proto["rows"][0]["id"]
@@ -459,7 +455,7 @@ def test_swap_parties_skips_user_edited_row_even_when_agreed_text_is_auto(doc_wi
         assert r2.status_code == 200, r2.text
         after = r2.json()["rows"][0]
         assert after["user_edited"] is True
-        assert after["agreed_text"] == "Редакция Арендатора"
+        assert after["agreed_text"] == "Редакция Арендодателя"
 
 
 def test_swap_parties_recomputes_when_user_edited_false(doc_with_changes):
@@ -467,7 +463,7 @@ def test_swap_parties_recomputes_when_user_edited_false(doc_with_changes):
     agreed_text recomputed to the new drafting role's auto-label.
     """
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         assert proto["rows"][0]["user_edited"] is False
@@ -481,7 +477,7 @@ def test_get_protocol_rows_returns_existing_without_rebuild(doc_with_changes):
     edits) without triggering a rebuild that would wipe them.
     """
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         row_id = proto["rows"][0]["id"]
@@ -499,7 +495,7 @@ def test_list_protocols_for_document(doc_with_changes):
     so the frontend can decide whether to load or build.
     """
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r0 = client.get("/api/protocols", params={"document_id": str(doc.id)})
         assert r0.status_code == 200
         assert r0.json() == []
@@ -513,7 +509,7 @@ def test_list_protocols_for_document(doc_with_changes):
 
 def test_add_row_appends_empty_user_added_row(doc_with_changes):
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         r2 = client.post(f"/api/protocols/{proto['id']}/rows", json={})
@@ -526,7 +522,7 @@ def test_add_row_appends_empty_user_added_row(doc_with_changes):
 
 def test_delete_row_removes_row(doc_with_changes):
     doc, _, _ = doc_with_changes
-    with TestClient(app) as client:
+    with TestClient(app, base_url="http://localhost") as client:
         r = client.post(f"/api/documents/{doc.id}/protocol")
         proto = r.json()
         row_id = proto["rows"][0]["id"]
