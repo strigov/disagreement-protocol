@@ -43,7 +43,7 @@ export function ExportForm({ documentId, contractName, rowCount, onBusyChange }:
     <label><span className="field-label">Имя файла (без .docx)</span><input className="field" value={filename} onChange={(e) => { setFilename(e.target.value); setDone(false); }} disabled={busy} aria-invalid={!!error} aria-describedby={error ? "export-error" : undefined} /></label>
     {cleaned && <p className="export-filename">Файл: {cleaned}.docx</p>}
     {error && <p className="notice notice-error" id="export-error" role="alert">{error}</p>}
-    {done && !error && <p className="notice notice-success" role="status">Скачивание началось. Проверьте загрузки браузера.</p>}
+    {done && !error && <p className="notice notice-success" role="status">{window.location.protocol === "disprot:" ? "Выберите папку и подтвердите сохранение в открывшемся окне." : "Скачивание началось. Проверьте загрузки браузера."}</p>}
     <button type="submit" disabled={busy || !cleaned} className="btn btn-primary" aria-busy={busy || undefined}>
       {busy ? <LoaderCircle size={15} className="spinner" /> : <Download size={15} />}{busy ? "Сохраняем…" : "Сохранить"}
     </button>

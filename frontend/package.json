@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1 -p 3000",
     "build": "next build",
+    "build:desktop": "vite build --config vite.desktop.config.ts",
     "start": "next start --hostname 127.0.0.1 -p 3000",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"
@@ -18,6 +19,7 @@
     "postcss": "8.5.26",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-router-dom": "7.18.4",
     "tailwindcss": "3.4.19"
   },
   "devDependencies": {

@@ -41,6 +41,10 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 
+# Desktop build output (never package local documents or the developer database)
+desktop/build/
+desktop/dist/
+
 # Local research materials
 docs/brainstorming/Materials/
 docs/plans/*.ledger.json

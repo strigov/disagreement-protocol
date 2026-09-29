@@ -1,0 +1,50 @@
+{
+  "name": "disagreement-protocol-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Локальное приложение для протоколов разногласий из договоров Word",
+  "author": "strigov",
+  "main": "src/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "prepare:app": "node scripts/prepare.mjs",
+    "pack": "npm run prepare:app && electron-builder --dir --publish never",
+    "dist": "npm run prepare:app && electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.4.5",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "com.strigov.disagreement-protocol",
+    "productName": "Протокол разногласий",
+    "artifactName": "DisagreementProtocol-${version}-${os}-${arch}.${ext}",
+    "directories": { "output": "dist" },
+    "files": ["src/**", "package.json"],
+    "extraResources": [
+      { "from": "build/backend/disprot-engine", "to": "engine", "filter": ["**/*"] },
+      { "from": "build/ui", "to": "ui", "filter": ["**/*"] }
+    ],
+    "asar": true,
+    "afterPack": "scripts/after-pack.cjs",
+    "mac": {
+      "identity": "-",
+      "target": ["dmg"],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "hardenedRuntime": true,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
+    },
+    "win": { "target": ["nsis"], "icon": "build/icon.ico" },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "installerLanguages": ["ru_RU", "en_US"]
+    }
+  }
+}
