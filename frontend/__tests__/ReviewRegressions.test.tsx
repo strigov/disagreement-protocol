@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ProtocolPage from "@/app/documents/[id]/protocol/page";
 import ProtocolTable from "@/components/ProtocolTable";
@@ -125,7 +125,8 @@ test("delete waits for another row's save and preserves its new text", async () 
   fireEvent.blur(screen.getByDisplayValue("9.9"));
   await waitFor(() => expect(api.patchRow).toHaveBeenCalledOnce());
   await userEvent.click(screen.getAllByLabelText("Действия со строкой")[1]);
-  await userEvent.click(screen.getAllByRole("button", { name: /Исключить/ })[1]);
+  await userEvent.click(screen.getByRole("button", { name: "Исключить из протокола" }));
+  await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Исключить" }));
   expect(api.deleteRow).not.toHaveBeenCalled();
   await act(async () => { saved.resolve({ ...ROW, point_label: "9.9" }); });
   await waitFor(() => expect(api.deleteRow).toHaveBeenCalledOnce());
@@ -139,7 +140,8 @@ test("structural request failure leaves editor mounted", async () => {
   render(<ProtocolPage />);
   await screen.findByText("1.1");
   await userEvent.click(screen.getByLabelText("Действия со строкой"));
-  await userEvent.click(screen.getByRole("button", { name: /Исключить/ }));
+  await userEvent.click(screen.getByRole("button", { name: "Исключить из протокола" }));
+  await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Исключить" }));
   await screen.findByText("delete failed");
   expect(screen.getByText("1.1")).toBeInTheDocument();
   await userEvent.click(screen.getByText("ABCD"));

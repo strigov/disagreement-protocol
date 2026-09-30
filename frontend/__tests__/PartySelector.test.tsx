@@ -33,7 +33,7 @@ test("add new party then remove existing produces correct PATCH shape", () => {
   };
   const captured: PartyDraft[][] = [];
   render(<Harness initial={[existing]} onSubmit={(p) => captured.push(p)} />);
-  fireEvent.click(screen.getByText("+ Добавить сторону"));
+  fireEvent.click(screen.getByRole("button", { name: "Добавить сторону" }));
   // Two name inputs now visible (existing + new).
   const nameInputs = screen.getAllByPlaceholderText("Наименование");
   fireEvent.change(nameInputs[1], { target: { value: "АО Б" } });

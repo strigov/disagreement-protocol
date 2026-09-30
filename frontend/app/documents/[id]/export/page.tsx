@@ -2,18 +2,23 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { ExportForm } from "@/components/ExportForm";
+import { Icon } from "@/components/icons/Icon";
+import { buttonClassName } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function ExportPage() {
   const params = useParams<{ id: string }>();
   return <WorkspaceShell step={3} documentId={params.id}>
-    <div className="max-w-lg mx-auto">
-      <Link className="btn btn-quiet mb-5" href={`/documents/${params.id}/protocol`}><ArrowLeft size={14} /> Вернуться к протоколу</Link>
-      <h1 className="page-title">Экспорт</h1>
-      <p className="page-description mb-6">Сохраните протокол разногласий в формате DOCX.</p>
-      <div className="surface !p-0"><ExportForm documentId={params.id} /></div>
+    <div className="mx-auto max-w-lg">
+      <Link className={buttonClassName({ variant: "ghost", size: "sm", className: "mb-8" })} href={`/documents/${params.id}/protocol`}>
+        <Icon name="arrow-left" /> Вернуться к протоколу
+      </Link>
+      <PageHeader rubric="Экспорт DOCX" title="Экспорт" description="Сохраните протокол разногласий в формате DOCX." />
+      <div className="mt-8 rounded-md border border-line-c bg-bg-elev p-6 shadow-sm">
+        <ExportForm documentId={params.id} />
+      </div>
     </div>
   </WorkspaceShell>;
 }

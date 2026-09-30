@@ -3,17 +3,32 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import { rememberDocument } from "@/lib/recent-documents";
 import type { AnalysisOut, Protocol, ProtocolRow, ValidationReport } from "@/lib/types";
-import { Download, CircleCheck, TriangleAlert, LoaderCircle, Check, FileText } from "lucide-react";
+import { Icon, type IconName } from "@/components/icons/Icon";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/States";
 import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { ExportDialog } from "@/components/ExportDialog";
 import ProtocolTable, { type ProtocolTableHandle, type SaveState } from "@/components/ProtocolTable";
+
+const SAVE_STATUS: Record<SaveState, { label: string; icon: IconName; className: string }> = {
+  saved: { label: "Все изменения сохранены", icon: "check", className: "text-ok" },
+  dirty: { label: "Есть несохранённые изменения", icon: "triangle-alert", className: "text-warn" },
+  saving: { label: "Сохраняем изменения…", icon: "loader-circle", className: "text-ink-2 motion-safe:animate-spin" },
+  error: { label: "Не удалось сохранить изменения", icon: "circle-alert", className: "text-danger" },
+};
 
 export default function ProtocolPage() {
   const params = useParams<{ id: string }>();
   const tableRef = useRef<ProtocolTableHandle>(null);
   const operation = useRef(false);
   const analysisVersion = useRef(0);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [exportOpen, setExportOpen] = useState(false);
@@ -52,6 +67,7 @@ export default function ProtocolPage() {
           const version = ++analysisVersion.current;
           const a = await api.getAnalysis(params.id);
           if (!cancelled && version === analysisVersion.current) setAnalysis(a);
+          if (!cancelled) rememberDocument({ id: params.id, title: a.contract_name, stage: "protocol" });
         } catch {
           if (!cancelled) setOperationError("Не удалось получить проверку полноты. Повторите действие после восстановления связи.");
         }
@@ -62,7 +78,7 @@ export default function ProtocolPage() {
     return () => {
       cancelled = true;
     };
-  }, [params.id]);
+  }, [params.id, attempt]);
 
   const refreshAnalysis = async () => {
     const version = ++analysisVersion.current;
@@ -146,32 +162,78 @@ export default function ProtocolPage() {
     setAnalysis(null);
   });
 
-  if (error) return <WorkspaceShell step={3} documentId={params.id}><div className="notice notice-error" role="alert"><h1 className="text-xl font-semibold mb-2">Не удалось загрузить протокол</h1><p>{error}</p></div></WorkspaceShell>;
-  if (!protocol) return <WorkspaceShell step={3} documentId={params.id}><div className="loading-state" aria-busy="true"><LoaderCircle className="spinner mx-auto mb-5 text-blue-600" size={28} /><p>Строим таблицу…</p></div></WorkspaceShell>;
+  const retry = () => {
+    setError(null);
+    setOperationError(null);
+    setAttempt((value) => value + 1);
+  };
+
+  if (error) return (
+    <WorkspaceShell step={3} documentId={params.id}>
+      <ErrorState titleLevel={1} title="Не удалось загрузить протокол" text={error} onRetry={retry} />
+    </WorkspaceShell>
+  );
+  if (!protocol) return (
+    <WorkspaceShell wide step={3} documentId={params.id}>
+      <div aria-busy="true" className="space-y-6">
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-32" />
+          <Skeleton className="h-10 w-80 max-w-full" />
+          <Skeleton className="h-3 w-64 max-w-full" />
+        </div>
+        <p className="flex items-center gap-2 text-sm text-ink-2"><Icon name="loader-circle" className="motion-safe:animate-spin" />Строим таблицу…</p>
+        <div className="grid gap-4 rounded-lg border border-line-c bg-bg-elev p-4 shadow-sm md:grid-cols-workbench-narrow lg:grid-cols-workbench">
+          <div className="space-y-2">{[0, 1, 2, 3].map((index) => <Skeleton key={index} className="h-14 w-full" />)}</div>
+          <div className="space-y-3"><Skeleton className="h-8 w-40" /><Skeleton className="h-32 w-full" /><Skeleton className="h-20 w-full" /></div>
+        </div>
+      </div>
+    </WorkspaceShell>
+  );
 
   const report: ValidationReport | null = analysis?.validation_report ?? null;
   const uncovered = report ? Math.max(0, report.textual_revisions_total - report.covered_revisions) : 0;
   const diagnostics = analysis?.preflight_diagnostics ?? [];
   const warningCount = (report?.warnings.length ?? 0) + diagnostics.length;
+  const hasIssues = uncovered > 0 || warningCount > 0;
   const draftingParty = analysis?.parties.find((p) => p.id === analysis?.drafting_party_id);
   const counterparty = analysis?.parties.find((p) => p.id !== analysis?.drafting_party_id);
-  const saveLabel = { saved: "Все изменения сохранены", dirty: "Есть несохранённые изменения", saving: "Сохраняем изменения…", error: "Не удалось сохранить изменения" }[saveState];
+  const save = SAVE_STATUS[saveState];
   return (
     <WorkspaceShell wide step={3} documentId={params.id} onNavigate={(href) => { void perform(async () => { router.push(href); }, false); }}>
-      <header className="document-heading">
-        <div><div className="eyebrow">Рабочее пространство договора</div><h1>Протокол разногласий</h1>
-          {analysis?.contract_name && <p className="document-name flex gap-1.5"><FileText size={14} className="shrink-0 mt-0.5" />{analysis.contract_name}</p>}
-          <div className="document-meta"><span>Наша сторона: <strong className="font-medium">{draftingParty?.name || draftingParty?.role || "загружаем…"}</strong></span><span className="meta-separator" /><span className={`save-indicator ${saveState === "error" ? "!text-red-600" : saveState === "dirty" ? "!text-amber-700" : ""}`} aria-live="polite">{saveState === "saving" ? <LoaderCircle size={12} className="spinner" /> : saveState === "saved" ? <Check size={12} /> : <TriangleAlert size={12} />}{saveLabel}</span></div>
+      <PageHeader
+        rubric="Проверка протокола"
+        title="Протокол разногласий"
+        meta={<>
+          {analysis?.contract_name && <span className="flex min-w-0 items-center gap-1.5 text-ink-1"><Icon name="file-text" className="text-ink-2" /><span className="wrap-anywhere">{analysis.contract_name}</span></span>}
+          <span className="flex items-center gap-1.5"><span className="rubric">Наша сторона</span><strong className="font-medium text-ink">{draftingParty?.name || draftingParty?.role || "загружаем…"}</strong></span>
+          <span className="flex items-center gap-1.5 text-ink-1" aria-live="polite"><Icon name={save.icon} className={save.className} />{save.label}</span>
+        </>}
+        actions={
+          <Button variant="primary" disabled={busy} aria-busy={busy || undefined} aria-label="Экспорт DOCX"
+            onClick={() => { void perform(async () => { setExportOpen(true); }, false); }}>
+            <Icon name="download" size={16} />Скачать DOCX
+          </Button>
+        }
+      />
+      <section aria-label="Проверка полноты" className={cn("mb-4 mt-6 rounded-md border border-line-c", hasIssues ? "bg-warn-soft" : "bg-ok-soft")}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-sm text-ink">
+          <Icon name={hasIssues ? "triangle-alert" : "circle-check"} size={16} className={hasIssues ? "text-warn" : "text-ok"} />
+          <span className="min-w-0 flex-1">{report ? <>{uncovered > 0 ? <>Не покрыто правок: <strong>{uncovered}</strong> из {report.textual_revisions_total}.</> : <>Все текстовые правки учтены: <strong>{report.covered_revisions}</strong> из {report.textual_revisions_total}.</>}{warningCount > 0 && <> Замечаний: <strong>{warningCount}</strong>.</>}</> : "Проверка полноты пока недоступна."}</span>
+          <button type="button" onClick={() => setDetailsOpen(!detailsOpen)} aria-expanded={detailsOpen} aria-controls="validation-details"
+            className="flex items-center gap-1 rounded-xs text-xs font-medium text-ink-1 underline decoration-line-strong underline-offset-4 hover:text-ink">
+            {detailsOpen ? "Скрыть" : "Подробнее"}<Icon name="chevron-down" className={cn("transition-transform", detailsOpen && "rotate-180")} />
+          </button>
         </div>
-        <button type="button" className="btn btn-primary" disabled={busy} aria-busy={busy || undefined} aria-label="Экспорт DOCX" onClick={() => { void perform(async () => { setExportOpen(true); }, false); }}><Download size={15} /> Скачать DOCX</button>
-      </header>
-      <section className={`coverage-strip ${uncovered > 0 || warningCount > 0 ? "has-warnings" : ""}`} aria-label="Проверка полноты">
-        {uncovered > 0 || warningCount > 0 ? <TriangleAlert size={16} className="shrink-0" /> : <CircleCheck size={16} className="shrink-0" />}
-        <span>{report ? <>{uncovered > 0 ? <>Не покрыто правок: <strong>{uncovered}</strong> из {report.textual_revisions_total}.</> : <>Все текстовые правки учтены: <strong>{report.covered_revisions}</strong> из {report.textual_revisions_total}.</>}{warningCount > 0 && <> Замечаний: <strong>{warningCount}</strong>.</>}</> : "Проверка полноты пока недоступна."}</span>
-        <button type="button" onClick={() => setDetailsOpen(!detailsOpen)} aria-expanded={detailsOpen} aria-controls="validation-details">{detailsOpen ? "Скрыть" : "Подробнее"}</button>
+        {detailsOpen && (
+          <div id="validation-details" className="space-y-3 border-t border-line-c px-4 py-3 text-sm leading-relaxed text-ink-1">
+            <p>Проверка полноты показывает, учтены ли исходные правки. Юридическую корректность редакций вы проверяете самостоятельно.</p>
+            {report?.warnings.length ? <ul className="list-disc space-y-1 pl-5">{report.warnings.map((warning, index) => <li key={index}>{warning.message}</li>)}</ul> : null}
+            {diagnostics.length > 0 && <ul className="list-disc space-y-1 pl-5">{diagnostics.map((item, index) => <li key={index}>{item.message}</li>)}</ul>}
+            {!report && <Button variant="ghost" size="sm" onClick={() => void refreshAnalysis()}><Icon name="history" />Повторить проверку</Button>}
+          </div>
+        )}
       </section>
-      {detailsOpen && <div id="validation-details" className="notice mb-5"><p>Проверка полноты показывает, учтены ли исходные правки. Юридическую корректность редакций вы проверяете самостоятельно.</p>{report?.warnings.length ? <ul className="list-disc pl-4 mt-3 space-y-1">{report.warnings.map((warning, index) => <li key={index}>{warning.message}</li>)}</ul> : null}{diagnostics.length > 0 && <ul className="list-disc pl-4 mt-3 space-y-1">{diagnostics.map((item, index) => <li key={index}>{item.message}</li>)}</ul>}{!report && <button className="btn btn-secondary mt-3" onClick={() => void refreshAnalysis()}>Повторить проверку</button>}</div>}
-      {operationError && <p role="alert" className="notice notice-error mb-5">{operationError}</p>}
+      {operationError && <Notice tone="danger" role="alert" className="mb-4">{operationError}</Notice>}
       <ProtocolTable ref={tableRef} busy={busy} rows={protocol.rows} initialMode="focus" storageKey={protocol.id}
         reviewContext={analysis?.drafting_party_id ?? ""} warnings={report?.warnings ?? []} onSaveStateChange={setSaveState}
         counterpartyRole={counterparty?.role ?? ""} draftingRole={draftingParty?.role ?? ""}

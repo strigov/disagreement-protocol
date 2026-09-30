@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import PartiesPage from "@/app/documents/[id]/parties/page";
 import { TestRoute, useTestParams } from "./route-context";
+import { readRecentDocuments } from "@/lib/recent-documents";
 import { server } from "@/src/mocks/server";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
@@ -18,6 +19,7 @@ function RoutedPage({ params }: { params: { id: string } }) {
 
 beforeEach(() => {
   push.mockClear();
+  window.localStorage.clear();
 });
 
 const analysisWithTwoParties = {
@@ -128,4 +130,127 @@ test("surfaces fetch error", async () => {
   render(<RoutedPage params={{ id: "doc-err" }} />);
 
   await waitFor(() => expect(screen.getByText(/500 boom/)).toBeInTheDocument());
+});
+
+const BUILD = "Построить протокол";
+const PICK_SIDE = "Отметьте вашу сторону — от её имени будет составлен протокол.";
+const FILL_IN = "Заполните наименование и роль каждой стороны.";
+
+test("without a chosen side the requirements list explains why the button is disabled", async () => {
+  server.use(
+    http.get("/api/documents/doc-1/analysis", () =>
+      HttpResponse.json({ ...analysisWithTwoParties, drafting_party_id: null }),
+    ),
+  );
+
+  render(<RoutedPage params={{ id: "doc-1" }} />);
+  await screen.findByText("Стороны договора");
+
+  const button = screen.getByRole("button", { name: BUILD });
+  expect(button).toBeDisabled();
+  expect(screen.getByText(PICK_SIDE)).toBeInTheDocument();
+  expect(button).toHaveAccessibleDescription(/Отметьте вашу сторону/);
+
+  await userEvent.click(screen.getByRole("radio", { name: "Составитель: ООО А" }));
+
+  expect(screen.queryByText(PICK_SIDE)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: BUILD })).toBeEnabled();
+});
+
+test("a cleared name lists the missing fields until it is filled in again", async () => {
+  server.use(
+    http.get("/api/documents/doc-1/analysis", () => HttpResponse.json(analysisWithTwoParties)),
+  );
+
+  render(<RoutedPage params={{ id: "doc-1" }} />);
+  await screen.findByText("Стороны договора");
+  expect(screen.queryByText(FILL_IN)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: BUILD })).toBeEnabled();
+
+  await userEvent.clear(screen.getByDisplayValue("ООО А"));
+
+  expect(screen.getByText(FILL_IN)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: BUILD })).toBeDisabled();
+
+  await userEvent.type(screen.getAllByPlaceholderText("Наименование")[0], "ООО Ромашка");
+
+  expect(screen.queryByText(FILL_IN)).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: BUILD })).toBeEnabled();
+});
+
+test("a failed load shows an error with «Повторить» that loads the parties on the second try", async () => {
+  let calls = 0;
+  server.use(
+    http.get("/api/documents/doc-1/analysis", () => {
+      calls += 1;
+      return calls === 1 ? new HttpResponse("boom", { status: 500 }) : HttpResponse.json(analysisWithTwoParties);
+    }),
+  );
+
+  render(<RoutedPage params={{ id: "doc-1" }} />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось загрузить стороны");
+  expect(screen.getByRole("alert")).toHaveTextContent(/500 boom/);
+  expect(screen.queryByText("Стороны договора")).not.toBeInTheDocument();
+  expect(calls).toBe(1);
+
+  await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
+
+  expect(await screen.findByText("Стороны договора")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("ООО А")).toBeInTheDocument();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  expect(calls).toBe(2);
+});
+
+test("does not show «Стороны договора» while the parties are still loading", async () => {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  server.use(
+    http.get("/api/documents/doc-1/analysis", async () => {
+      await gate;
+      return HttpResponse.json(analysisWithTwoParties);
+    }),
+  );
+
+  render(<RoutedPage params={{ id: "doc-1" }} />);
+
+  expect(screen.getByText("Загружаем…")).toBeInTheDocument();
+  expect(screen.queryByText("Стороны договора")).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: BUILD })).not.toBeInTheDocument();
+
+  release();
+  expect(await screen.findByText("Стороны договора")).toBeInTheDocument();
+  expect(screen.queryByText("Загружаем…")).not.toBeInTheDocument();
+});
+
+test("a failed build keeps the form and shows the error next to it", async () => {
+  server.use(
+    http.get("/api/documents/doc-1/analysis", () => HttpResponse.json(analysisWithTwoParties)),
+    http.patch("/api/documents/doc-1/parties", () => new HttpResponse("patch failed", { status: 500 })),
+  );
+
+  render(<RoutedPage params={{ id: "doc-1" }} />);
+  await screen.findByText("Стороны договора");
+  await userEvent.click(screen.getByRole("button", { name: BUILD }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(/500 patch failed/);
+  expect(screen.getByText("Стороны договора")).toBeInTheDocument();
+  expect(screen.getByDisplayValue("ООО А")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: BUILD })).toBeEnabled();
+  expect(push).not.toHaveBeenCalled();
+});
+
+test("remembers the document at the parties stage once it is loaded", async () => {
+  server.use(
+    http.get("/api/documents/doc-1/analysis", () =>
+      HttpResponse.json({ ...analysisWithTwoParties, contract_name: "Договор аренды №7" }),
+    ),
+  );
+
+  render(<RoutedPage params={{ id: "doc-1" }} />);
+  await screen.findByText("Стороны договора");
+
+  expect(readRecentDocuments()).toEqual([
+    { id: "doc-1", title: "Договор аренды №7", stage: "parties", openedAt: expect.any(Number) },
+  ]);
 });

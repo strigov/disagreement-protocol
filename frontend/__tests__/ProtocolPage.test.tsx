@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import ProtocolPage from "@/app/documents/[id]/protocol/page";
 import ProtocolTable from "@/components/ProtocolTable";
 import { server } from "@/src/mocks/server";
+import { readRecentDocuments } from "@/lib/recent-documents";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 
@@ -385,11 +386,63 @@ test("row actions menu offers merge and delete", async () => {
     />,
   );
 
-  // Open the <details> action menu.
+  // Choosing an item closes the menu, so it is reopened for the next action.
   await userEvent.click(screen.getByLabelText("Действия со строкой"));
   await userEvent.click(screen.getByRole("button", { name: /Объединить с предыдущей/ }));
   expect(onMerge).toHaveBeenCalledWith("r1", "previous");
 
-  await userEvent.click(screen.getByRole("button", { name: /Исключить/ }));
+  await userEvent.click(screen.getByLabelText("Действия со строкой"));
+  await userEvent.click(screen.getByRole("button", { name: "Исключить из протокола" }));
+  expect(onDelete).not.toHaveBeenCalled();
+  await userEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Исключить" }));
   expect(onDelete).toHaveBeenCalledWith("r1");
+});
+
+test("load error offers a retry that reuses the existing protocol", async () => {
+  let listCalls = 0;
+  let buildCalled = false;
+  server.use(
+    http.get("/api/protocols", () => {
+      listCalls += 1;
+      return listCalls === 1
+        ? new HttpResponse("offline", { status: 503 })
+        : HttpResponse.json([{ id: "p1", document_id: "doc1", rows: [] }]);
+    }),
+    http.get("/api/protocols/p1/rows", () =>
+      HttpResponse.json({ id: "p1", document_id: "doc1", rows: [ROW] }),
+    ),
+    http.post("/api/documents/doc1/protocol", () => {
+      buildCalled = true;
+      return HttpResponse.json({ id: "p1", document_id: "doc1", rows: [] });
+    }),
+    http.get("/api/documents/doc1/analysis", () => HttpResponse.json(BASE_ANALYSIS)),
+  );
+
+  render(<ProtocolPage />);
+  expect(await screen.findByRole("heading", { name: "Не удалось загрузить протокол" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
+  await screen.findByText("1.1");
+  expect(buildCalled).toBe(false);
+  expect(listCalls).toBe(2);
+});
+
+test("opening the protocol remembers the document for the home page", async () => {
+  window.localStorage.clear();
+  server.use(
+    http.get("/api/protocols", () =>
+      HttpResponse.json([{ id: "p1", document_id: "doc1", rows: [] }]),
+    ),
+    http.get("/api/protocols/p1/rows", () =>
+      HttpResponse.json({ id: "p1", document_id: "doc1", rows: [ROW] }),
+    ),
+    http.get("/api/documents/doc1/analysis", () =>
+      HttpResponse.json({ ...BASE_ANALYSIS, contract_name: "Договор аренды" }),
+    ),
+  );
+
+  render(<ProtocolPage />);
+  await screen.findByText("1.1");
+  await waitFor(() => expect(readRecentDocuments()).toEqual([
+    expect.objectContaining({ id: "doc1", title: "Договор аренды", stage: "protocol" }),
+  ]));
 });

@@ -60,7 +60,7 @@ test("search and attention filter locate the appropriate clause, and empty resul
   expect(screen.getByRole("heading", { name: "Пункт 4.2" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Открыть пункт 3.1" })).not.toBeInTheDocument();
   await userEvent.clear(screen.getByRole("textbox", { name: "Поиск по пунктам" }));
-  await userEvent.selectOptions(screen.getByRole("combobox"), "attention");
+  await userEvent.click(screen.getByRole("button", { name: /Требуют внимания/ }));
   expect(screen.queryByRole("button", { name: "Открыть пункт 3.1" })).not.toBeInTheDocument();
   await userEvent.type(screen.getByRole("textbox", { name: "Поиск по пунктам" }), "несуществующий пункт");
   await userEvent.click(screen.getByRole("button", { name: "Сбросить фильтры" }));
