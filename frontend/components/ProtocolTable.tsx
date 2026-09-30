@@ -5,8 +5,21 @@ import {
   type KeyboardEvent,
 } from "react";
 import type { ProtocolRow, ValidationWarning } from "@/lib/types";
-import { AlignLeft, Table2, Search, Plus, ArrowLeftRight, ChevronLeft, ChevronRight, MoreHorizontal, Check, TriangleAlert } from "lucide-react";
+import { cn } from "@/lib/cn";
+import { Icon } from "@/components/icons/Icon";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { EmptyState } from "@/components/ui/States";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DiffText } from "./DiffText";
+import { ClauseFilter } from "./protocol/ClauseFilter";
+import { ClauseFocusView } from "./protocol/ClauseFocusView";
+import { ClauseSidebar } from "./protocol/ClauseSidebar";
+import { ProtocolGrid } from "./protocol/ProtocolGrid";
+import { ProtocolToolbar } from "./protocol/ProtocolToolbar";
+import { RowActions } from "./protocol/RowActions";
+import type { ClauseFilterValue, EditableField, ProtocolColumn } from "./protocol/types";
 import { needsAttention, rowFingerprint, warningsForRow } from "@/lib/review";
 
 export type SaveState = "saved" | "dirty" | "saving" | "error";
@@ -33,7 +46,6 @@ export interface ProtocolTableHandle {
   revealRow: (id: string) => void;
 }
 
-type EditableField = "point_label" | "party_1_text" | "party_2_text" | "agreed_text";
 type EditingCell = { rowId: string; field: EditableField } | null;
 type DraftMap = Record<string, string>;
 const cellKey = (rowId: string, field: EditableField) => `${rowId}:${field}`;
@@ -43,6 +55,8 @@ const withoutKey = <T,>(map: Record<string, T>, key: string): Record<string, T> 
   return next;
 };
 
+// Контейнер держит всё состояние редактирования и сохранения; вынесенные
+// компоненты в ./protocol получают готовые элементы ячеек и колбэки.
 const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(function ProtocolTable({
   rows, draftingRole, counterpartyRole, busy = false,
   onPatch, onDelete, onMerge, onAddRow, onSwapParties,
@@ -51,10 +65,11 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
   const [mode, setMode] = useState(initialMode);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<ClauseFilterValue>("all");
   const [showDiff, setShowDiff] = useState(true);
   const [reviewed, setReviewed] = useState<Record<string, string>>({});
   const [storageNotice, setStorageNotice] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<ProtocolRow | null>(null);
   const transition = useRef(false);
   const [switching, setSwitching] = useState(false);
   useEffect(() => {
@@ -169,7 +184,6 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
         "data-row-id": row.id,
         "data-field": field,
         disabled: isSaving || busy,
-        className: `edit-input ${error ? "border-red-400" : ""}`,
         onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
           const next = event.currentTarget.value;
           updateDrafts((current) => ({ ...current, [key]: next }));
@@ -180,11 +194,13 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
         onKeyDown: (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => handleEditKey(event, multiline),
       };
       return (
-        <div className="space-y-1">
-          {multiline ? <textarea {...common} rows={Math.max(2, value.split("\n").length)} /> : <input {...common} />}
-          {isSaving && <span className="text-xs text-gray-500" role="status">Сохраняем…</span>}
+        <div className="w-full space-y-1 font-sans text-sm font-normal leading-relaxed">
+          {multiline
+            ? <Textarea {...common} rows={Math.max(3, value.split("\n").length)} className="min-h-36" />
+            : <Input {...common} className="max-w-xs" />}
+          {isSaving && <span className="flex items-center gap-1.5 text-xs text-ink-2" role="status"><Icon name="loader-circle" className="motion-safe:animate-spin" />Сохраняем…</span>}
           {error && !isSaving && (
-            <span className="text-xs text-red-600" role="alert">
+            <span className="block text-xs text-danger" role="alert">
               Не удалось сохранить: {error}. Enter (Ctrl+Enter для текста) — повтор, Esc — отмена.
             </span>
           )}
@@ -205,27 +221,37 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
         onKeyDown={(event) => {
           if (["Enter", " ", "F2"].includes(event.key)) { event.preventDefault(); activate(); }
         }}
-        className={`editable ${blocked ? "cursor-wait opacity-60" : ""}`}
+        className={cn(
+          "block min-h-6 cursor-text whitespace-pre-wrap rounded-xs px-1 py-0.5 transition-colors wrap-anywhere hover:bg-bg-hover focus-visible:bg-bg-hover",
+          field === "point_label" && "inline-block min-w-8",
+          blocked && "cursor-wait opacity-60",
+        )}
       >
         {row[field] ? (mode === "focus" && showDiff && (field === "party_1_text" || field === "party_2_text")
           ? <DiffText before={row.party_1_text} after={row.party_2_text} side={field === "party_1_text" ? "before" : "after"} />
-          : row[field]) : <span className="text-slate-400">{field === "point_label" ? "Без номера" : "Нажмите, чтобы добавить текст"}</span>}
+          : row[field]) : <span className="text-ink-2">{field === "point_label" ? "Без номера" : "Нажмите, чтобы добавить текст"}</span>}
       </span>
     );
   };
 
-  const columns: { field: EditableField; header: string; label: string }[] = [
+  const columns: ProtocolColumn[] = [
     { field: "point_label", header: "Пункт договора", label: "Пункт договора" },
     { field: "party_1_text", header: `Редакция: ${counterpartyRole || "контрагент"}`, label: `Редакция ${counterpartyRole || "контрагента"}` },
     { field: "party_2_text", header: `Редакция: ${draftingRole || "наша сторона"}`, label: `Редакция ${draftingRole || "нашей стороны"}` },
     { field: "agreed_text", header: "Согласованная редакция", label: "Согласованная редакция" },
   ];
   const isReviewed = (row: ProtocolRow) => reviewed[row.id] === rowFingerprint(row, reviewContext);
+  const isAttention = (row: ProtocolRow) => needsAttention(row, warnings);
   const reviewedCount = rows.filter(isReviewed).length;
+  const counts: Record<ClauseFilterValue, number> = {
+    all: rows.length,
+    attention: rows.filter(isAttention).length,
+    unreviewed: rows.length - reviewedCount,
+  };
   const filtered = rows.filter((row) => {
     // A failed draft must remain reachable even if a search/filter changes.
     if (Object.keys(drafts).some((key) => key.startsWith(`${row.id}:`))) return true;
-    return (filter === "all" || (filter === "attention" ? needsAttention(row, warnings) : !isReviewed(row))) &&
+    return (filter === "all" || (filter === "attention" ? isAttention(row) : !isReviewed(row))) &&
       `${row.point_label} ${row.party_1_text} ${row.party_2_text} ${row.agreed_text}`.toLocaleLowerCase("ru").includes(query.toLocaleLowerCase("ru").trim());
   });
   const active = filtered.find((row) => row.id === selectedId) ?? filtered[0];
@@ -237,7 +263,7 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
     try { if (await saveAll()) { setEditingCell(null); action(); } }
     finally { transition.current = false; setSwitching(false); }
   };
-  const toggleReviewed = async (row: ProtocolRow) => {
+  const setReviewMark = async (row: ProtocolRow, mark: boolean, after?: () => void) => {
     // Capture exactly the visible draft before flushing it. A later edit or a
     // side swap invalidates the mark because its content fingerprint changes.
     const snapshot = { ...row };
@@ -246,92 +272,89 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
     }
     await changeView(() => {
       const next = { ...reviewed };
-      if (isReviewed(row)) delete next[row.id];
-      else next[row.id] = rowFingerprint(snapshot, reviewContext);
+      if (mark) next[row.id] = rowFingerprint(snapshot, reviewContext);
+      else delete next[row.id];
       setReviewed(next);
       if (storageKey) {
         try { window.localStorage.setItem(`protocol-review:${storageKey}`, JSON.stringify(next)); }
         catch { setStorageNotice(true); }
       }
+      after?.();
     });
   };
-  const renderActions = (row: ProtocolRow) => {
-    const blocked = busy || rowHasPendingSave(row.id);
-    return <details className="row-actions">
-      <summary className="icon-button" aria-label="Действия со строкой"><MoreHorizontal size={16} /></summary>
-      <div className="row-menu">
-        <button type="button" disabled={blocked} onClick={() => onMerge(row.id, "previous")}>Объединить с предыдущей</button>
-        <button type="button" disabled={blocked} onClick={() => onMerge(row.id, "next")}>Объединить со следующей</button>
-        <button type="button" disabled={blocked} onClick={() => onDelete(row.id)} className="text-red-600">Исключить из протокола</button>
-      </div>
-    </details>;
+  const toggleReviewed = (row: ProtocolRow) => setReviewMark(row, !isReviewed(row));
+  const reviewAndNext = (row: ProtocolRow) => {
+    const nextId = filtered[activeIndex + 1]?.id;
+    return setReviewMark(row, true, () => { if (nextId) setSelectedId(nextId); });
   };
-  const search = <label className="search-field"><Search size={14} /><input aria-label="Поиск по пунктам" placeholder="Номер пункта или текст" value={query} onChange={(e) => setQuery(e.target.value)} /></label>;
-  const filters = <select className="filter-select" aria-label="Фильтр пунктов" value={filter} onChange={(e) => setFilter(e.target.value)}>
-    <option value="all">Все пункты</option><option value="attention">Требуют внимания</option><option value="unreviewed">Не проверены мной</option>
-  </select>;
-  const empty = <div className="empty-state">{rows.length ? <>Ничего не найдено.<br /><button className="btn btn-quiet mt-2" onClick={() => { setQuery(""); setFilter("all"); }}>Сбросить фильтры</button></> : <>В протоколе пока нет строк.<br />Нажмите «Добавить строку», чтобы начать.</>}</div>;
-  const rowWarnings = active ? warningsForRow(active, warnings) : [];
+  const renderActions = (row: ProtocolRow) => (
+    <RowActions
+      disabled={busy || rowHasPendingSave(row.id)}
+      onMergePrevious={() => { void onMerge(row.id, "previous"); }}
+      onMergeNext={() => { void onMerge(row.id, "next"); }}
+      onRequestDelete={() => setPendingDelete(row)}
+    />
+  );
+  const search = (
+    <label className="relative block">
+      <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-2" />
+      <Input aria-label="Поиск по пунктам" placeholder="Номер пункта или текст" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-8" />
+    </label>
+  );
+  const clauseFilter = (layout: "stack" | "inline") => <ClauseFilter value={filter} counts={counts} layout={layout} onChange={setFilter} />;
+  const empty = rows.length
+    ? <EmptyState icon="search" text="Ничего не найдено." cta={<Button variant="ghost" size="sm" onClick={() => { setQuery(""); setFilter("all"); }}>Сбросить фильтры</Button>} />
+    : <EmptyState icon="file-text" text={<>В протоколе пока нет строк.<br />Нажмите «Добавить строку», чтобы начать.</>} />;
+  const navDisabled = busy || switching;
   return (
     <div aria-busy={busy || switching}>
-      <div className="editor-toolbar">
-        <div className="segmented" role="group" aria-label="Вид протокола">
-          <button type="button" disabled={busy || switching} aria-pressed={mode === "focus"} onClick={() => void changeView(() => setMode("focus"))}><AlignLeft size={14} /> По пунктам</button>
-          <button type="button" disabled={busy || switching} aria-pressed={mode === "table"} onClick={() => void changeView(() => setMode("table"))}><Table2 size={14} /> Таблица</button>
+      <ProtocolToolbar
+        mode={mode} modeDisabled={navDisabled} actionsDisabled={busy}
+        onModeChange={(next) => void changeView(() => setMode(next))}
+        onAddRow={onAddRow} onSwapParties={onSwapParties}
+      />
+      {mode === "focus" ? (
+        <div className="grid overflow-hidden rounded-lg border border-line-c bg-bg-elev shadow-sm md:grid-cols-workbench-narrow lg:grid-cols-workbench">
+          <ClauseSidebar
+            rows={filtered} totalCount={rows.length} activeId={active?.id} navDisabled={navDisabled}
+            isReviewed={isReviewed} isAttention={isAttention}
+            onSelect={(rowId) => void changeView(() => setSelectedId(rowId))}
+            search={search} filter={clauseFilter("stack")} reviewedCount={reviewedCount} storageNotice={storageNotice}
+          />
+          {active ? (
+            <ClauseFocusView
+              row={active} position={activeIndex + 1} total={filtered.length} navDisabled={navDisabled}
+              onPrevious={activeIndex > 0 ? () => void changeView(() => setSelectedId(filtered[activeIndex - 1].id)) : null}
+              onNext={activeIndex < filtered.length - 1 ? () => void changeView(() => setSelectedId(filtered[activeIndex + 1].id)) : null}
+              actions={renderActions(active)}
+              attention={isAttention(active)} rowWarnings={warningsForRow(active, warnings)}
+              showDiff={showDiff} onShowDiffChange={setShowDiff}
+              counterpartyRole={counterpartyRole} draftingRole={draftingRole}
+              counterpartyLabel={columns[1].label} draftingLabel={columns[2].label}
+              renderCell={renderEditableText}
+              reviewed={isReviewed(active)} reviewDisabled={navDisabled || saveState !== "saved"}
+              onToggleReviewed={() => void toggleReviewed(active)}
+              onReviewAndNext={() => void reviewAndNext(active)}
+              reviewAndNextDisabled={navDisabled || saveState !== "saved" || isReviewed(active)}
+            />
+          ) : <div className="grid place-items-center">{empty}</div>}
         </div>
-        <div className="toolbar-actions">
-          <button type="button" disabled={busy} onClick={onAddRow} className="btn btn-secondary"><Plus size={14} /> Добавить строку</button>
-          <button type="button" disabled={busy} onClick={onSwapParties} className="btn btn-quiet"><ArrowLeftRight size={14} /> Поменять стороны</button>
-        </div>
-      </div>
-      {mode === "focus" ? <div className="editor-workbench">
-        <aside className="clause-sidebar" aria-label="Навигация по пунктам">
-          <div className="sidebar-top"><div className="sidebar-title">Пункты договора <span className="count">{rows.length}</span></div>{search}{filters}</div>
-          <nav className="clause-list" aria-label="Пункты договора">
-            {filtered.map((row) => <button key={row.id} className="clause-nav-item" aria-current={row.id === active?.id} disabled={busy || switching}
-              onClick={() => void changeView(() => setSelectedId(row.id))} aria-label={`Открыть пункт ${row.point_label || "без номера"}`}>
-              <span className="clause-nav-top"><span>Пункт {row.point_label || "без номера"}</span>{isReviewed(row) ? <Check size={13} className="text-emerald-600" aria-label="Проверен вами" /> : needsAttention(row, warnings) ? <TriangleAlert size={13} className="text-amber-600" aria-label="Требует внимания" /> : null}</span>
-              <span className="clause-preview">{row.party_2_text || row.party_1_text || "Новая строка протокола"}</span>
-            </button>)}
-          </nav>
-          <div className="review-progress"><span>Проверено вами: {reviewedCount} из {rows.length}</span><progress value={reviewedCount} max={Math.max(1, rows.length)} aria-label="Прогресс вашей проверки" /><p>{storageNotice ? "Отметки доступны только до закрытия страницы." : "Отметки сохраняются в этом браузере."}</p></div>
-        </aside>
-        {active ? <section className="clause-content" aria-label="Выбранный пункт">
-          <header className="clause-heading">
-            <div><h2>Пункт {renderEditableText(active, "point_label", "Пункт договора")}</h2><p>{activeIndex + 1} из {filtered.length} · {active.user_edited ? "Отредактирован вручную" : "Сформирован из правок договора"}</p></div>
-            <div className="flex items-center gap-2">
-              <button className="icon-button" aria-label="Предыдущий пункт" disabled={busy || switching || activeIndex <= 0} onClick={() => void changeView(() => setSelectedId(filtered[activeIndex - 1].id))}><ChevronLeft size={16} /></button>
-              <button className="icon-button" aria-label="Следующий пункт" disabled={busy || switching || activeIndex >= filtered.length - 1} onClick={() => void changeView(() => setSelectedId(filtered[activeIndex + 1].id))}><ChevronRight size={16} /></button>
-              {renderActions(active)}
-            </div>
-          </header>
-          <div className="clause-body">
-            {needsAttention(active, warnings) && <div className="notice mb-5"><strong>Проверьте этот пункт</strong>{rowWarnings.length ? <ul className="mt-1 space-y-1">{rowWarnings.map((warning, index) => <li key={index}>{warning.message}</li>)}</ul> : <p>Сверьте номер и содержание с исходным договором.</p>}</div>}
-            <div className="comparison-label">Редакции сторон<label className="diff-toggle"><input type="checkbox" checked={showDiff} onChange={(e) => setShowDiff(e.target.checked)} /> Подсветить различия</label></div>
-            <div className="comparison-grid">
-              <section className="comparison-pane"><div className="comparison-pane-header"><span>Контрагент</span><h3>{counterpartyRole || "Редакция контрагента"}</h3></div><div className="comparison-text">{renderEditableText(active, "party_1_text", columns[1].label)}</div></section>
-              <section className="comparison-pane ours"><div className="comparison-pane-header"><span>Наша сторона</span><h3>{draftingRole || "Наша редакция"}</h3></div><div className="comparison-text">{renderEditableText(active, "party_2_text", columns[2].label)}</div></section>
-            </div>
-            <div className="agreed-section"><div className="agreed-heading"><h3>Согласованная редакция</h3><span>Войдёт в итоговый протокол</span></div><div className="agreed-text">{renderEditableText(active, "agreed_text", "Согласованная редакция")}</div><p className="edit-hint">Нажмите на текст для редактирования. Ctrl / ⌘ + Enter — сохранить, Esc — отменить.</p></div>
-          </div>
-          <footer className="clause-footer">
-            <label className="review-check"><input type="checkbox" checked={isReviewed(active)} disabled={busy || switching || saveState !== "saved"} onChange={() => void toggleReviewed(active)} /> Проверено мной</label>
-            <button className="btn btn-secondary" disabled={busy || switching || activeIndex >= filtered.length - 1} onClick={() => void changeView(() => setSelectedId(filtered[activeIndex + 1].id))}>Следующий пункт <ChevronRight size={14} /></button>
-          </footer>
-        </section> : empty}
-      </div> : <>
-        <div className="table-search">{search}{filters}</div>
-        <div className="protocol-table-wrap">
-          <table className="protocol-table">
-            <thead><tr>{columns.map((column) => <th key={column.field} scope="col">{column.header}</th>)}<th scope="col"><span className="sr-only">Действия</span></th></tr></thead>
-            <tbody>{filtered.length === 0 ? <tr><td colSpan={5}>{empty}</td></tr> : filtered.map((row) => <tr key={row.id} className={needsAttention(row, warnings) ? "needs-attention" : ""}>
-              {columns.map((column) => <td key={column.field}>{renderEditableText(row, column.field, column.label)}{column.field === "point_label" && row.confidence < 0.85 && <span className="inline-flex text-amber-600 mt-2" aria-label={`Низкая уверенность: ${(row.confidence * 100).toFixed(0)}%`}><TriangleAlert size={13} /></span>}</td>)}
-              <td>{renderActions(row)}</td>
-            </tr>)}</tbody>
-          </table>
-        </div>
-        <p className="edit-hint">Нажмите на ячейку для редактирования. Изменения сохраняются при выходе из ячейки.</p>
-      </>}
+      ) : (
+        <ProtocolGrid
+          rows={filtered} columns={columns} isAttention={isAttention}
+          renderCell={renderEditableText} renderActions={renderActions}
+          empty={empty} search={search} filter={clauseFilter("inline")}
+        />
+      )}
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Исключить пункт ${pendingDelete.point_label || "без номера"} из протокола?`}
+          description="Строка и все её редакции будут удалены из протокола. Отменить это действие нельзя."
+          confirmLabel="Исключить"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => { const id = pendingDelete.id; setPendingDelete(null); void onDelete(id); }}
+        />
+      )}
     </div>
   );
 });

@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { Check, FileText, LockKeyhole, ChevronRight } from "lucide-react";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/cn";
+import { Icon } from "@/components/icons/Icon";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 
 interface Props {
   children: ReactNode;
@@ -12,28 +14,63 @@ interface Props {
   onNavigate?: (href: string) => void;
 }
 
+const STEPS = ["Документ", "Стороны", "Проверка протокола"] as const;
+
 export function WorkspaceShell({ children, step = 1, documentId, wide, onNavigate }: Props) {
   const navigate = (href: string, content: ReactNode, className?: string) => onNavigate
     ? <button type="button" className={className} onClick={() => onNavigate(href)}>{content}</button>
     : <Link className={className} href={href}>{content}</Link>;
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        {navigate("/", <><span className="brand-mark"><FileText size={19} strokeWidth={1.7} /></span><span>Протокол<span className="brand-subtitle">Работа с разногласиями</span></span></>, "brand")}
-        <span className="local-badge"><LockKeyhole size={13} /> Документы остаются на вашем компьютере</span>
+    <div className="flex min-h-screen flex-col bg-bg text-ink">
+      <header className="border-b border-line-c bg-bg-elev">
+        <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 md:px-9">
+          {navigate("/", <>
+            <span className="font-serif text-2xl font-semibold leading-none text-ink">Протокол</span>
+            <span className="rubric max-sm:hidden">разногласий</span>
+          </>, "-mx-2 flex items-baseline gap-2 rounded-sm px-2 py-1 transition-colors hover:bg-bg-hover")}
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 text-xs text-ink-2">
+              <Icon name="lock-keyhole" className="text-ink-2" />
+              <span className="max-md:sr-only">Документы остаются на вашем компьютере</span>
+            </span>
+            <ThemeToggle />
+          </div>
+        </div>
+        <nav aria-label="Этапы работы" className="border-t border-line-c">
+          <ol className="mx-auto flex h-12 max-w-screen-2xl items-center gap-1 overflow-x-auto px-4 md:justify-center md:gap-3 md:px-9">
+            {STEPS.map((label, index) => {
+              const number = index + 1;
+              const current = number === step;
+              const complete = number < step;
+              const href = number === 1 ? "/" : `/documents/${documentId}/parties`;
+              const content = <>
+                <span className={cn(
+                  "grid h-6 w-6 shrink-0 place-items-center rounded-pill font-mono text-2xs",
+                  current && "bg-accent text-accent-ink",
+                  complete && "bg-ok-soft text-ok",
+                  !current && !complete && "border border-line-strong text-ink-2",
+                )}>
+                  {complete ? <Icon name="check" size={12} /> : `0${number}`}
+                </span>
+                <span className={cn(!current && "max-sm:sr-only")}>{label}</span>
+              </>;
+              return (
+                <li key={label} className="flex shrink-0 items-center gap-1 md:gap-3" aria-current={current ? "step" : undefined}>
+                  {complete
+                    ? navigate(href, content, "flex items-center gap-2 rounded-sm px-2 py-1 text-xs text-ink-1 transition-colors hover:bg-bg-hover hover:text-ink")
+                    : <span className={cn("flex items-center gap-2 px-2 py-1 text-xs", current ? "font-medium text-ink" : "text-ink-2")}>{content}</span>}
+                  {number < STEPS.length && <Icon name="chevron-right" size={12} className="text-ink-3" />}
+                </li>
+              );
+            })}
+          </ol>
+        </nav>
       </header>
-      <nav className="workflow" aria-label="Этапы работы">
-        {(["Документ", "Стороны", "Проверка протокола"] as const).map((label, index) => {
-          const number = index + 1;
-          const content = <><span className="step-number">{number < step ? <Check size={13} /> : `0${number}`}</span>{label}</>;
-          const href = number === 1 ? "/" : `/documents/${documentId}/parties`;
-          return <div className={`workflow-step ${number === step ? "current" : ""} ${number < step ? "complete" : ""}`} key={label} aria-current={number === step ? "step" : undefined}>
-            {number < step ? navigate(href, content, "step-link") : <span className="step-link">{content}</span>}
-            {number < 3 && <ChevronRight className="step-chevron" size={14} />}
-          </div>;
-        })}
-      </nav>
-      <main id="main-content" className={wide ? "workspace workspace-wide" : "workspace"}>{children}</main>
+      <main id="main-content" className={cn("w-full flex-1", wide
+        ? "mx-auto max-w-screen-2xl px-4 py-6 md:px-9 md:py-8"
+        : "mx-auto max-w-4xl px-4 py-10 md:px-8 md:py-14")}>
+        {children}
+      </main>
     </div>
   );
 }

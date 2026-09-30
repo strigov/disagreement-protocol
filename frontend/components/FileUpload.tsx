@@ -1,9 +1,13 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { FileUp, ArrowUpRight, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import { rememberDocument } from "@/lib/recent-documents";
+import { Icon } from "@/components/icons/Icon";
+import { buttonClassName } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
 
 export function FileUpload() {
   const router = useRouter();
@@ -23,6 +27,7 @@ export function FileUpload() {
     setFilename(file.name);
     try {
       const result = await api.uploadDocument(file);
+      rememberDocument({ id: result.id, title: file.name.replace(/\.docx$/i, ""), stage: "analysis" });
       router.push(`/documents/${result.id}/analysis`);
     } catch (e) {
       setError((e as Error).message);
@@ -45,19 +50,38 @@ export function FileUpload() {
     event.target.value = "";
   };
   return (
-    <div className={`upload-surface ${dragging ? "dragging" : ""}`} aria-busy={busy}
-      onDrop={onDrop} onDragOver={(e) => e.preventDefault()}
+    <div
+      className={cn(
+        "flex flex-col items-center rounded-lg border border-dashed px-4 py-12 text-center transition-colors md:py-16",
+        dragging ? "border-accent bg-accent-soft" : "border-line-strong bg-bg-elev",
+      )}
+      aria-busy={busy}
+      onDrop={onDrop}
+      onDragOver={(e) => e.preventDefault()}
       onDragEnter={(e) => { e.preventDefault(); dragDepth.current++; setDragging(true); }}
-      onDragLeave={() => { if (--dragDepth.current <= 0) setDragging(false); }}>
-      <span className="upload-icon">{busy ? <LoaderCircle size={27} className="spinner" /> : <FileUp size={28} strokeWidth={1.5} />}</span>
-      <p className="upload-title">Перетащите .docx сюда или выберите файл</p>
-      <p className="upload-caption">Договор с исправлениями Word · до 25 МБ</p>
-      <label className={`btn btn-primary relative ${busy ? "opacity-50" : "cursor-pointer"}`}>
-        Выбрать файл <ArrowUpRight size={14} />
-        <input className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" aria-label="Выбрать файл" type="file" accept=".docx" disabled={busy} onChange={onPick} />
+      onDragLeave={() => { if (--dragDepth.current <= 0) setDragging(false); }}
+    >
+      <span className="mb-5 grid h-12 w-12 place-items-center rounded-pill bg-bg-sunk text-ink-2">
+        {busy ? <Icon name="loader-circle" size={20} className="motion-safe:animate-spin" /> : <Icon name="file-up" size={20} />}
+      </span>
+      <p className="max-w-md font-serif text-2xl font-semibold leading-snug text-ink">Перетащите .docx сюда или выберите файл</p>
+      <p className="mt-2 text-sm text-ink-2">Договор с исправлениями Word · до 25 МБ</p>
+      <label
+        className={buttonClassName({
+          variant: "primary",
+          className: cn(
+            "relative mt-6 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent",
+            busy ? "pointer-events-none opacity-50" : "cursor-pointer",
+          ),
+        })}
+      >
+        Выбрать файл <Icon name="arrow-up-right" />
+        <input className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Выбрать файл" type="file" accept=".docx" disabled={busy} onChange={onPick} />
       </label>
-      {busy ? <p className="upload-note" role="status">Загружаем… {filename}</p> : <p className="upload-note">Обработка и хранение — только на вашем компьютере</p>}
-      {error && <p className="notice notice-error mt-5 text-left" role="alert">{error}</p>}
+      {busy
+        ? <p className="mt-4 max-w-full text-xs text-ink-2 wrap-anywhere" role="status">Загружаем… {filename}</p>
+        : <p className="mt-4 text-xs text-ink-2">Обработка и хранение — только на вашем компьютере</p>}
+      {error && <Notice tone="danger" role="alert" className="mt-6 w-full max-w-xl text-left">{error}</Notice>}
     </div>
   );
 }

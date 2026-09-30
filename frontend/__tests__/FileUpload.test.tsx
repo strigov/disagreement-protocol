@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { FileUpload } from "@/components/FileUpload";
+import { readRecentDocuments } from "@/lib/recent-documents";
 import { server } from "@/src/mocks/server";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
@@ -12,6 +13,7 @@ vi.mock("next/navigation", () => ({
 
 beforeEach(() => {
   push.mockClear();
+  window.localStorage.clear();
 });
 
 const docx = (name: string) =>
@@ -119,4 +121,37 @@ test("falls back to a Russian message when the error body is empty", async () =>
   await userEvent.upload(screen.getByLabelText("Выбрать файл"), docx("gateway.docx"));
 
   expect(await screen.findByText("Ошибка запроса (HTTP 502)")).toBeInTheDocument();
+});
+
+test("remembers a successfully uploaded document in the recent list", async () => {
+  server.use(
+    http.post("/api/documents", () => HttpResponse.json({ id: "doc-123", status: "uploaded" })),
+  );
+
+  render(<FileUpload />);
+  await userEvent.upload(screen.getByLabelText("Выбрать файл"), docx("contract.docx"));
+
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/doc-123/analysis"));
+  expect(readRecentDocuments()).toEqual([
+    { id: "doc-123", title: "contract", stage: "analysis", openedAt: expect.any(Number) },
+  ]);
+});
+
+test("a failed or rejected upload is not added to the recent list", async () => {
+  server.use(
+    http.post("/api/documents", () => new HttpResponse("upload failed", { status: 500 })),
+  );
+
+  render(<FileUpload />);
+  await userEvent.upload(screen.getByLabelText("Выбрать файл"), docx("broken.docx"));
+  expect(await screen.findByText("500 upload failed")).toBeInTheDocument();
+
+  fireEvent.drop(screen.getByText("Перетащите .docx сюда или выберите файл").closest("div")!, {
+    dataTransfer: { files: [new File(["pdf"], "scan.pdf", { type: "application/pdf" })] },
+  });
+  expect(
+    await screen.findByText("Выберите договор в формате .docx. Файлы .doc и .pdf не поддерживаются."),
+  ).toBeInTheDocument();
+
+  expect(readRecentDocuments()).toEqual([]);
 });

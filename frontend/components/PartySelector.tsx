@@ -1,5 +1,11 @@
 "use client";
 
+import { Icon } from "@/components/icons/Icon";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { cn } from "@/lib/cn";
+
 export interface PartyDraft {
   id: string | null;
   name: string;
@@ -34,30 +40,41 @@ export function PartySelector({ parties, draftingUid, onChange, onDraftingChange
     if (removed && removed._uid === draftingUid) onDraftingChange(null);
   };
   return (
-    <fieldset disabled={disabled}>
+    <fieldset disabled={disabled} className="min-w-0">
       <legend className="sr-only">Выберите вашу сторону договора</legend>
-      <div className="party-grid">
-        {parties.map((p, idx) => (
-          <section key={p._uid} className={`party-card ${draftingUid === p._uid ? "selected" : ""}`}>
-            <div className="party-card-top">
-              <label className="party-choice">
-                <input type="radio" name="drafting" aria-label={`Составитель: ${p.name || "новая сторона"}`}
-                  checked={draftingUid === p._uid} onChange={() => onDraftingChange(p._uid)} />
-                {draftingUid === p._uid ? "Наша сторона" : `Сторона ${idx + 1}`}
-              </label>
-              <button type="button" onClick={() => remove(idx)} className="text-xs text-slate-500 hover:text-red-600">Удалить</button>
-            </div>
-            <label><span className="field-label">Наименование организации</span>
-              <input className="field" value={p.name} onChange={(e) => update(idx, { name: e.target.value })} placeholder="Наименование" aria-label="Наименование стороны" />
-            </label>
-            <label><span className="field-label">Роль в договоре</span>
-              <input className="field" value={p.role} onChange={(e) => update(idx, { role: e.target.value })} placeholder="Роль" aria-label="Роль стороны" />
-            </label>
-            <p className="party-caption">{draftingUid === p._uid ? "Протокол будет составлен от имени этой стороны." : "Проверьте название и роль, распознанные в договоре."}</p>
-          </section>
-        ))}
+      <div className="grid gap-4 md:grid-cols-2">
+        {parties.map((p, idx) => {
+          const selected = draftingUid === p._uid;
+          return (
+            <section
+              key={p._uid}
+              className={cn(
+                "rounded-md border border-line-c bg-bg-elev p-4 shadow-sm",
+                selected && "outline outline-2 -outline-offset-2 outline-accent",
+              )}
+            >
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <label className="rubric flex cursor-pointer items-center gap-2 py-1">
+                  <input type="radio" name="drafting" className="h-4 w-4 cursor-pointer accent-accent" aria-label={`Составитель: ${p.name || "новая сторона"}`}
+                    checked={selected} onChange={() => onDraftingChange(p._uid)} />
+                  {selected ? "Наша сторона" : `Сторона ${idx + 1}`}
+                </label>
+                <Button variant="ghost" size="xs" onClick={() => remove(idx)}>Удалить</Button>
+              </div>
+              <div className="space-y-3">
+                <Field label="Наименование организации">
+                  <Input value={p.name} onChange={(e) => update(idx, { name: e.target.value })} placeholder="Наименование" aria-label="Наименование стороны" />
+                </Field>
+                <Field label="Роль в договоре">
+                  <Input value={p.role} onChange={(e) => update(idx, { role: e.target.value })} placeholder="Роль" aria-label="Роль стороны" />
+                </Field>
+              </div>
+              <p className="mt-4 text-xs leading-relaxed text-ink-2">{selected ? "Протокол будет составлен от имени этой стороны." : "Проверьте название и роль, распознанные в договоре."}</p>
+            </section>
+          );
+        })}
       </div>
-      {parties.length < 2 && <button type="button" onClick={add} className="btn btn-secondary mt-4">+ Добавить сторону</button>}
+      {parties.length < 2 && <Button variant="ghost" onClick={add} className="mt-4"><Icon name="plus" /> Добавить сторону</Button>}
     </fieldset>
   );
 }

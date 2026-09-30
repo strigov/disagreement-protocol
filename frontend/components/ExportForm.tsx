@@ -1,8 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Download, FileText, LoaderCircle } from "lucide-react";
 import { api } from "@/lib/api";
+import { Icon } from "@/components/icons/Icon";
+import { Button } from "@/components/ui/Button";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Notice } from "@/components/ui/Notice";
 
 const sanitize = (raw: string) => raw.trim().replace(/\.docx$/i, "").replace(/[\\/]/g, "").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200).trim();
 
@@ -38,15 +42,23 @@ export function ExportForm({ documentId, contractName, rowCount, onBusyChange }:
     } catch (e) { setError((e as Error).message); }
     finally { pending.current = false; setBusy(false); onBusyChange?.(false); }
   };
-  return <form className="export-form" onSubmit={submit}>
-    <div className="export-preview"><FileText size={29} className="text-blue-600" strokeWidth={1.5} /><div><strong>Протокол разногласий</strong><span>Документ Word · .docx{rowCount !== undefined && ` · Строк: ${rowCount}`}</span></div></div>
-    <label><span className="field-label">Имя файла (без .docx)</span><input className="field" value={filename} onChange={(e) => { setFilename(e.target.value); setDone(false); }} disabled={busy} aria-invalid={!!error} aria-describedby={error ? "export-error" : undefined} /></label>
-    {cleaned && <p className="export-filename">Файл: {cleaned}.docx</p>}
-    {error && <p className="notice notice-error" id="export-error" role="alert">{error}</p>}
-    {done && !error && <p className="notice notice-success" role="status">Скачивание началось. Проверьте загрузки браузера.</p>}
-    <button type="submit" disabled={busy || !cleaned} className="btn btn-primary" aria-busy={busy || undefined}>
-      {busy ? <LoaderCircle size={15} className="spinner" /> : <Download size={15} />}{busy ? "Сохраняем…" : "Сохранить"}
-    </button>
-    <p className="edit-hint text-center mt-3">Все сохранённые изменения войдут в документ.</p>
+  return <form className="space-y-4" onSubmit={submit}>
+    <div className="flex items-center gap-3 rounded-md border border-line-c bg-bg-sunk p-3">
+      <Icon name="file-text" size={20} className="text-accent" />
+      <div className="min-w-0">
+        <p className="font-serif text-lg font-semibold leading-tight text-ink">Протокол разногласий</p>
+        <p className="mt-0.5 text-xs text-ink-2">Документ Word · .docx{rowCount !== undefined && ` · Строк: ${rowCount}`}</p>
+      </div>
+    </div>
+    <Field label="Имя файла (без .docx)">
+      <Input value={filename} onChange={(e) => { setFilename(e.target.value); setDone(false); }} disabled={busy} aria-invalid={!!error} aria-describedby={error ? "export-error" : undefined} />
+    </Field>
+    {cleaned && <p className="font-mono text-xs text-ink-2 wrap-anywhere">Файл: {cleaned}.docx</p>}
+    {error && <Notice tone="danger" role="alert" id="export-error">{error}</Notice>}
+    {done && !error && <Notice tone="ok" role="status">Скачивание началось. Проверьте загрузки браузера.</Notice>}
+    <Button type="submit" variant="primary" disabled={busy || !cleaned} className="w-full" aria-busy={busy || undefined}>
+      {busy ? <Icon name="loader-circle" size={16} className="motion-safe:animate-spin" /> : <Icon name="download" size={16} />}{busy ? "Сохраняем…" : "Сохранить"}
+    </Button>
+    <p className="text-center text-xs text-ink-2">Все сохранённые изменения войдут в документ.</p>
   </form>;
 }

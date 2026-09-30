@@ -1,7 +1,9 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import AnalysisPage from "@/app/documents/[id]/analysis/page";
 import { TestRoute, useTestParams } from "./route-context";
+import { readRecentDocuments } from "@/lib/recent-documents";
 import { server } from "@/src/mocks/server";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
@@ -17,6 +19,7 @@ function RoutedPage({ params }: { params: { id: string } }) {
 
 beforeEach(() => {
   push.mockClear();
+  window.localStorage.clear();
 });
 
 // The page polls once a second. Sitting out a full interval (plus slack) is
@@ -247,4 +250,85 @@ test("shows only the FastAPI detail when the analysis request fails", async () =
   expect(await screen.findByText("Документ не найден")).toBeInTheDocument();
   expect(screen.queryByText(/detail/)).not.toBeInTheDocument();
   expect(screen.queryByText(/404/)).not.toBeInTheDocument();
+});
+
+test("«Повторить» asks again once after a failed request and continues to parties", async () => {
+  let calls = 0;
+  server.use(
+    http.get("/api/documents/doc-retry/analysis", () => {
+      calls += 1;
+      return calls === 1
+        ? new HttpResponse("nope", { status: 500 })
+        : HttpResponse.json({ ...baseAnalysis, id: "doc-retry", status: "parsed" });
+    }),
+  );
+
+  render(<RoutedPage params={{ id: "doc-retry" }} />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось загрузить анализ");
+  // The failure is final until the user asks: no automatic retry.
+  await waitPastPollInterval();
+  expect(calls).toBe(1);
+  expect(push).not.toHaveBeenCalled();
+
+  await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
+
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/doc-retry/parties"));
+  expect(calls).toBe(2);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  await waitPastPollInterval();
+  expect(calls).toBe(2);
+});
+
+test("a failed document offers no retry and is remembered as an analysis stage", async () => {
+  server.use(
+    http.get("/api/documents/doc-failed/analysis", () =>
+      HttpResponse.json({
+        ...baseAnalysis,
+        id: "doc-failed",
+        status: "failed",
+        contract_name: "Договор аренды",
+        error_message: "Ошибка разбора OOXML",
+      }),
+    ),
+  );
+
+  render(<RoutedPage params={{ id: "doc-failed" }} />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Документ не удалось обработать");
+  expect(screen.queryByRole("button", { name: "Повторить" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Загрузить другой документ" })).toBeInTheDocument();
+  expect(readRecentDocuments()).toEqual([
+    { id: "doc-failed", title: "Договор аренды", stage: "analysis", openedAt: expect.any(Number) },
+  ]);
+});
+
+test("an unknown status can be retried", async () => {
+  let calls = 0;
+  server.use(
+    http.get("/api/documents/doc-odd/analysis", () => {
+      calls += 1;
+      return HttpResponse.json({ ...baseAnalysis, id: "doc-odd", status: calls === 1 ? "quarantined" : "parsed" });
+    }),
+  );
+
+  render(<RoutedPage params={{ id: "doc-odd" }} />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Неизвестный статус документа");
+  await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/doc-odd/parties"));
+  expect(calls).toBe(2);
+});
+
+test("a document that is redirected onward is not remembered by the analysis screen", async () => {
+  server.use(
+    http.get("/api/documents/doc-next/analysis", () =>
+      HttpResponse.json({ ...baseAnalysis, id: "doc-next", status: "parsed", contract_name: "Договор" }),
+    ),
+  );
+
+  render(<RoutedPage params={{ id: "doc-next" }} />);
+
+  await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/doc-next/parties"));
+  expect(readRecentDocuments()).toEqual([]);
 });

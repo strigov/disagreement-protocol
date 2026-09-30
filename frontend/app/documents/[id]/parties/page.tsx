@@ -1,10 +1,16 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowRight, ArrowLeft, LoaderCircle } from "lucide-react";
 import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { AnalysisSummary } from "@/components/AnalysisSummary";
+import { Icon } from "@/components/icons/Icon";
+import { Button } from "@/components/ui/Button";
+import { Notice } from "@/components/ui/Notice";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { ErrorState } from "@/components/ui/States";
 import { api } from "@/lib/api";
+import { rememberDocument } from "@/lib/recent-documents";
 import type { AnalysisOut } from "@/lib/types";
 import { PartySelector, newPartyUid, type PartyDraft } from "@/components/PartySelector";
 
@@ -18,13 +24,20 @@ export default function PartiesPage() {
   const [draftingUid, setDraftingUid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const submitting = useRef(false);
-  const [error, setError] = useState<string | null>(null);
+  // Two independent failures: the screen cannot load (nothing to show, retry
+  // reloads it) vs. building the protocol failed (the form stays, edits kept).
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // Bumped by "Повторить": re-runs the load effect.
+  const [attempt, setAttempt] = useState(0);
   const router = useRouter();
 
   useEffect(() => {
+    let cancelled = false;
     api
       .getAnalysis(params.id)
       .then((a) => {
+        if (cancelled) return;
         setAnalysis(a);
         const drafts: PartyDraft[] = a.parties.map((p) => ({
           id: p.id,
@@ -35,15 +48,17 @@ export default function PartiesPage() {
         setParties(drafts.length ? drafts : [0, 1].map(() => ({ id: null, name: "", role: "", _uid: newPartyUid() })));
         const draftingDraft = drafts.find((d) => d.id === a.drafting_party_id) ?? null;
         setDraftingUid(draftingDraft?._uid ?? null);
+        rememberDocument({ id: params.id, title: a.contract_name, stage: "parties" });
       })
-      .catch((e) => setError((e as Error).message));
-  }, [params.id]);
+      .catch((e) => { if (!cancelled) setLoadError((e as Error).message); });
+    return () => { cancelled = true; };
+  }, [params.id, attempt]);
 
   const submit = async () => {
     if (!draftingUid || submitting.current || parties.length !== 2 || parties.some((p) => !p.name.trim() || !p.role.trim())) return;
     submitting.current = true;
     setBusy(true);
-    setError(null);
+    setSubmitError(null);
     try {
       const payload = parties.map((p) => ({ id: p.id, name: p.name, role: p.role }));
       // First-pass PATCH: drafting may be a brand-new (id=null) party,
@@ -78,34 +93,87 @@ export default function PartiesPage() {
       await api.buildProtocol(params.id);
       router.push(`/documents/${params.id}/protocol`);
     } catch (e) {
-      setError((e as Error).message);
+      setSubmitError((e as Error).message);
     } finally {
       submitting.current = false;
       setBusy(false);
     }
   };
 
-  if (!analysis) return <WorkspaceShell step={2} documentId={params.id}>
-    {error ? <div className="notice notice-error" role="alert">{error}</div> : <div className="loading-state"><LoaderCircle className="spinner mx-auto mb-4" size={24} /><p>Загружаем…</p></div>}
-  </WorkspaceShell>;
+  if (loadError) return (
+    <WorkspaceShell step={2} documentId={params.id}>
+      <ErrorState
+        titleLevel={1}
+        title="Не удалось загрузить стороны"
+        text={loadError}
+        onRetry={() => { setLoadError(null); setAttempt((n) => n + 1); }}
+        className="max-w-2xl"
+      />
+    </WorkspaceShell>
+  );
+
+  if (!analysis) return (
+    <WorkspaceShell step={2} documentId={params.id}>
+      <div aria-busy="true">
+        <p className="mb-6 text-sm text-ink-2">Загружаем…</p>
+        <div className="grid gap-4 md:grid-cols-2">
+          {[0, 1].map((key) => (
+            <div key={key} className="rounded-md border border-line-c bg-bg-elev p-4 shadow-sm">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-5 h-3 w-40" />
+              <Skeleton className="mt-2 h-9 w-full" />
+              <Skeleton className="mt-4 h-3 w-32" />
+              <Skeleton className="mt-2 h-9 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </WorkspaceShell>
+  );
+
+  // Everything that still blocks "Построить протокол", in the order the user
+  // is most likely to fix it. Shown as a list next to the disabled button.
+  const blockers: string[] = [];
+  if (parties.length !== 2) blockers.push("Для протокола нужны две стороны. Добавьте недостающую или удалите лишнюю.");
+  if (parties.some((p) => !p.name.trim() || !p.role.trim())) blockers.push("Заполните наименование и роль каждой стороны.");
+  if (!draftingUid) blockers.push("Отметьте вашу сторону — от её имени будет составлен протокол.");
 
   return (
     <WorkspaceShell step={2} documentId={params.id}>
-      <div className="eyebrow">Договор загружен</div>
-      <h1 className="page-title">Стороны договора</h1>
-      {analysis.contract_name && <p className="document-name">{analysis.contract_name}</p>}
-      <p className="page-description">Проверьте названия и роли. Отметьте вашу сторону — от её имени будет составлен протокол разногласий.</p>
-      <AnalysisSummary analysis={analysis} />
-      {analysis.parties.length === 0 && <p className="notice mt-5">Стороны не удалось определить автоматически. Введите их названия и роли из договора.</p>}
-      <PartySelector parties={parties} draftingUid={draftingUid} onChange={setParties} onDraftingChange={setDraftingUid} disabled={busy} />
-      {parties.length !== 2 && <p className="notice mt-5">Для протокола нужны две стороны. Добавьте недостающую или удалите лишнюю.</p>}
-      {error && <p className="notice notice-error mt-5" role="alert">{error}</p>}
-      <div className="page-actions">
-        <button className="btn btn-quiet" disabled={busy} onClick={() => router.push("/")}><ArrowLeft size={14} /> Другой документ</button>
-        <button disabled={!draftingUid || busy || parties.length !== 2 || parties.some((p) => !p.name.trim() || !p.role.trim())}
-          onClick={submit} className="btn btn-primary">
-          {busy ? <><LoaderCircle size={15} className="spinner" /> Подготавливаем…</> : <>Построить протокол <ArrowRight size={15} /></>}
-        </button>
+      <PageHeader
+        rubric="Договор загружен"
+        title="Стороны договора"
+        description="Проверьте названия и роли. Отметьте вашу сторону — от её имени будет составлен протокол разногласий."
+        meta={analysis.contract_name ? <span className="font-serif text-base font-medium text-ink-1 wrap-anywhere">{analysis.contract_name}</span> : undefined}
+      />
+      <div className="mt-8 space-y-6">
+        <AnalysisSummary analysis={analysis} />
+        {analysis.parties.length === 0 && <Notice tone="warn">Стороны не удалось определить автоматически. Введите их названия и роли из договора.</Notice>}
+        <PartySelector parties={parties} draftingUid={draftingUid} onChange={setParties} onDraftingChange={setDraftingUid} disabled={busy} />
+        {submitError && <Notice tone="danger" role="alert">{submitError}</Notice>}
+      </div>
+      <div className="mt-10 flex flex-col-reverse gap-4 border-t border-line-c pt-6 sm:flex-row sm:items-start sm:justify-between">
+        <Button variant="ghost" disabled={busy} onClick={() => router.push("/")}><Icon name="arrow-left" /> Другой документ</Button>
+        <div className="flex flex-col gap-3 sm:items-end">
+          {blockers.length > 0 && (
+            <div id="build-requirements" className="rounded-md border border-line-c bg-bg-sunk px-3 py-2.5 text-sm text-ink-1">
+              <p className="rubric">Чтобы построить протокол:</p>
+              <ul className="mt-1.5 list-disc space-y-1 pl-4 marker:text-ink-2">
+                {blockers.map((item) => <li key={item}>{item}</li>)}
+              </ul>
+            </div>
+          )}
+          <Button
+            variant="primary"
+            disabled={blockers.length > 0 || busy}
+            aria-describedby={blockers.length > 0 ? "build-requirements" : undefined}
+            onClick={submit}
+          >
+            {busy
+              ? <><Icon name="loader-circle" className="motion-safe:animate-spin" /> Подготавливаем…</>
+              : <>Построить протокол <Icon name="arrow-right" /></>}
+          </Button>
+        </div>
       </div>
     </WorkspaceShell>
   );
