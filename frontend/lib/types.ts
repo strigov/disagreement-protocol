@@ -82,4 +82,31 @@ export interface Protocol {
   id: UUID;
   document_id: UUID;
   rows: ProtocolRow[];
+  form: ProtocolForm;
 }
+
+export interface ProtocolSignature {
+  name: string;
+  role: string;
+  position: string;
+  full_name: string;
+}
+
+export interface ProtocolForm {
+  title: string;
+  contract_reference: string;
+  place: string;
+  date: string;
+  opening_text: string;
+  closing_text: string;
+  point_title: string;
+  original_title: string;
+  proposed_title: string;
+  agreed_title: string;
+  mark_drafting_signature: boolean;
+  signatures: Record<UUID, ProtocolSignature>;
+}
+
+export type ProtocolFormPatch = {
+  [K in Exclude<keyof ProtocolForm, "signatures">]?: ProtocolForm[K] | null;
+} & { signatures?: Record<UUID, Partial<ProtocolSignature>> };

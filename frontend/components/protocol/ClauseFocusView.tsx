@@ -9,6 +9,7 @@ import type { RenderCell } from "./types";
 export function ClauseFocusView({
   row, position, total, navDisabled, onPrevious, onNext, actions, attention, rowWarnings, showDiff, onShowDiffChange,
   counterpartyRole, draftingRole, counterpartyLabel, draftingLabel, renderCell,
+  pointLabel = "Пункт договора", agreedLabel = "Согласованная редакция",
   reviewed, reviewDisabled, onToggleReviewed, onReviewAndNext, reviewAndNextDisabled,
 }: {
   row: ProtocolRow;
@@ -26,6 +27,8 @@ export function ClauseFocusView({
   draftingRole: string;
   counterpartyLabel: string;
   draftingLabel: string;
+  pointLabel?: string;
+  agreedLabel?: string;
   renderCell: RenderCell;
   reviewed: boolean;
   reviewDisabled: boolean;
@@ -45,7 +48,7 @@ export function ClauseFocusView({
             {position} из {total} · {row.user_edited ? "Отредактирован вручную" : "Сформирован из правок договора"}
           </p>
           <h2 className="mt-1 flex items-baseline gap-2 font-serif text-3xl font-semibold leading-tight text-ink">
-            Пункт {renderCell(row, "point_label", "Пункт договора")}
+            Пункт {renderCell(row, "point_label", pointLabel)}
           </h2>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -87,11 +90,11 @@ export function ClauseFocusView({
 
         <div>
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-            <h3 className="font-serif text-xl font-semibold text-ink">согласованная редакция</h3>
+            <h3 className="font-serif text-xl font-semibold text-ink">{agreedLabel}</h3>
             <span className="text-xs text-ink-2">Войдёт в итоговый протокол</span>
           </div>
           <div className="rounded-md border border-line-strong bg-bg p-3 text-sm leading-7 text-ink">
-            {renderCell(row, "agreed_text", "Согласованная редакция")}
+            {renderCell(row, "agreed_text", agreedLabel)}
           </div>
           <p className="mt-2 text-xs text-ink-2">
             Нажмите на текст, чтобы изменить его. <kbd className="rounded-xs border border-line-c bg-bg-sunk px-1 text-2xs">Ctrl</kbd> / <kbd className="rounded-xs border border-line-c bg-bg-sunk px-1 text-2xs">⌘</kbd> + <kbd className="rounded-xs border border-line-c bg-bg-sunk px-1 text-2xs">Enter</kbd> — сохранить, <kbd className="rounded-xs border border-line-c bg-bg-sunk px-1 text-2xs">Esc</kbd> — отменить.

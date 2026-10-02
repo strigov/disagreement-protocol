@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import ProtocolPage from "@/app/documents/[id]/protocol/page";
 import ProtocolTable from "@/components/ProtocolTable";
 import { api } from "@/lib/api";
+import { FORM } from "./fixtures/protocol-form";
 import type { ProtocolRow } from "@/lib/types";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
@@ -15,7 +16,7 @@ vi.mock("@/lib/api", () => ({ api: {
 const ROW: ProtocolRow = { id: "r1", sort_order: 0, point_label: "1.1", party_1_text: "ABCD", party_2_text: "Наш текст", agreed_text: "Согласовано", source_clause_key: "c1", confidence: 1, flags: [], user_edited: false };
 const ROW2: ProtocolRow = { ...ROW, id: "r2", sort_order: 1, point_label: "2.2" };
 const ANALYSIS = { id: "doc1", status: "built" as const, error_message: null, contract_name: "Тест", preflight_metrics: null, preflight_diagnostics: [], parties: [], validation_report: null, drafting_party_id: null };
-const PROTO = { id: "p1", document_id: "doc1", rows: [ROW] };
+const PROTO = { id: "p1", document_id: "doc1", rows: [ROW], form: FORM };
 const props = { draftingRole: "Автор", counterpartyRole: "Контрагент", onDelete: vi.fn(), onMerge: vi.fn(), onAddRow: vi.fn(), onSwapParties: vi.fn() };
 function deferred<T>() {
   let resolve!: (value: T) => void;
