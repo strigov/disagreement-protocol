@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel
 
+from app.schemas.protocol_form import ProtocolForm
+
 
 class ProtocolRowOut(BaseModel):
     id: UUID
@@ -20,6 +22,7 @@ class ProtocolOut(BaseModel):
     id: UUID
     document_id: UUID
     rows: list[ProtocolRowOut]
+    form: ProtocolForm
 
 
 class ProtocolRowPatch(BaseModel):

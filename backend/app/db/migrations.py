@@ -9,6 +9,7 @@ def upgrade_schema(engine) -> None:
 
     Base.metadata.create_all(bind=engine)
     additions = {
+        "protocols": {"form_json": "JSON"},
         "protocol_rows": {
             "source_clause_keys": "JSON",
             "agreed_text_edited": "BOOLEAN",

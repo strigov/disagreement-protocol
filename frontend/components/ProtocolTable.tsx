@@ -4,7 +4,7 @@ import {
   forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState,
   type KeyboardEvent,
 } from "react";
-import type { ProtocolRow, ValidationWarning } from "@/lib/types";
+import type { ProtocolForm, ProtocolRow, ValidationWarning } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons/Icon";
 import { Button } from "@/components/ui/Button";
@@ -28,6 +28,7 @@ interface ProtocolTableProps {
   rows: ProtocolRow[];
   draftingRole: string;
   counterpartyRole: string;
+  form?: ProtocolForm;
   busy?: boolean;
   initialMode?: "focus" | "table";
   storageKey?: string;
@@ -58,7 +59,7 @@ const withoutKey = <T,>(map: Record<string, T>, key: string): Record<string, T> 
 // Контейнер держит всё состояние редактирования и сохранения; вынесенные
 // компоненты в ./protocol получают готовые элементы ячеек и колбэки.
 const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(function ProtocolTable({
-  rows, draftingRole, counterpartyRole, busy = false,
+  rows, draftingRole, counterpartyRole, form, busy = false,
   onPatch, onDelete, onMerge, onAddRow, onSwapParties,
   initialMode = "table", storageKey, reviewContext = "", warnings = [], onSaveStateChange,
 }, ref) {
@@ -240,6 +241,12 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
     { field: "party_2_text", header: `Редакция: ${draftingRole || "наша сторона"}`, label: `Редакция ${draftingRole || "нашей стороны"}` },
     { field: "agreed_text", header: "Согласованная редакция", label: "Согласованная редакция" },
   ];
+  if (form) {
+    [form.point_title, form.original_title, form.proposed_title, form.agreed_title].forEach((title, index) => {
+      columns[index].header = title;
+      columns[index].label = title;
+    });
+  }
   const isReviewed = (row: ProtocolRow) => reviewed[row.id] === rowFingerprint(row, reviewContext);
   const isAttention = (row: ProtocolRow) => needsAttention(row, warnings);
   const reviewedCount = rows.filter(isReviewed).length;
@@ -329,7 +336,8 @@ const ProtocolTable = forwardRef<ProtocolTableHandle, ProtocolTableProps>(functi
               actions={renderActions(active)}
               attention={isAttention(active)} rowWarnings={warningsForRow(active, warnings)}
               showDiff={showDiff} onShowDiffChange={setShowDiff}
-              counterpartyRole={counterpartyRole} draftingRole={draftingRole}
+              counterpartyRole={form?.original_title ?? counterpartyRole} draftingRole={form?.proposed_title ?? draftingRole}
+              pointLabel={columns[0].label} agreedLabel={columns[3].label}
               counterpartyLabel={columns[1].label} draftingLabel={columns[2].label}
               renderCell={renderEditableText}
               reviewed={isReviewed(active)} reviewDisabled={navDisabled || saveState !== "saved"}

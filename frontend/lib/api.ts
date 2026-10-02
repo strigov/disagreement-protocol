@@ -1,4 +1,4 @@
-import type { AnalysisOut, Protocol, ProtocolRow, UUID } from "./types";
+import type { AnalysisOut, Protocol, ProtocolForm, ProtocolFormPatch, ProtocolRow, UUID } from "./types";
 
 const BASE = "";
 
@@ -85,6 +85,13 @@ export const api = {
 
   getProtocolRows: async (protocolId: UUID): Promise<Protocol> =>
     jsonOrThrow(await fetch(`${BASE}/api/protocols/${protocolId}/rows`)),
+
+  patchProtocolForm: async (protocolId: UUID, patch: ProtocolFormPatch): Promise<ProtocolForm> =>
+    jsonOrThrow(await fetch(`${BASE}/api/protocols/${protocolId}/form`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })),
 
   patchRow: async (
     protocolId: UUID,

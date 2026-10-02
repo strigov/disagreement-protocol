@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { rememberDocument } from "@/lib/recent-documents";
-import type { AnalysisOut, Protocol, ProtocolRow, ValidationReport } from "@/lib/types";
+import type { AnalysisOut, Protocol, ProtocolFormPatch, ProtocolRow, ValidationReport } from "@/lib/types";
 import { Icon, type IconName } from "@/components/icons/Icon";
 import { Button } from "@/components/ui/Button";
 import { Notice } from "@/components/ui/Notice";
@@ -15,6 +15,7 @@ import { ErrorState } from "@/components/ui/States";
 import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { ExportDialog } from "@/components/ExportDialog";
 import ProtocolTable, { type ProtocolTableHandle, type SaveState } from "@/components/ProtocolTable";
+import { ProtocolFormEditor, type ProtocolFormHandle } from "@/components/protocol/ProtocolFormEditor";
 
 const SAVE_STATUS: Record<SaveState, { label: string; icon: IconName; className: string }> = {
   saved: { label: "Все изменения сохранены", icon: "check", className: "text-ok" },
@@ -26,11 +27,15 @@ const SAVE_STATUS: Record<SaveState, { label: string; icon: IconName; className:
 export default function ProtocolPage() {
   const params = useParams<{ id: string }>();
   const tableRef = useRef<ProtocolTableHandle>(null);
+  const formRef = useRef<ProtocolFormHandle>(null);
+  const focusTab = useRef<string | null>(null);
   const operation = useRef(false);
   const analysisVersion = useRef(0);
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [formSaveState, setFormSaveState] = useState<SaveState>("saved");
+  const [tab, setTab] = useState<"clauses" | "form">("clauses");
   const [exportOpen, setExportOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
@@ -38,6 +43,13 @@ export default function ProtocolPage() {
   const [analysis, setAnalysis] = useState<AnalysisOut | null>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!busy && focusTab.current) {
+      document.getElementById(`tab-${focusTab.current}`)?.focus();
+      focusTab.current = null;
+    }
+  }, [busy, tab]);
 
   useEffect(() => {
     // Decide between loading existing rows vs first-time build.
@@ -114,7 +126,7 @@ export default function ProtocolPage() {
     setBusy(true);
     setOperationError(null);
     try {
-      if (!await tableRef.current?.saveAll()) {
+      if (!await tableRef.current?.saveAll() || (formRef.current && !await formRef.current.saveAll())) {
         setOperationError("Изменения не сохранены. Исправьте ошибку или отмените правку перед продолжением.");
         return;
       }
@@ -162,6 +174,13 @@ export default function ProtocolPage() {
     setAnalysis(null);
   });
 
+  const saveForm = async (patch: ProtocolFormPatch) => {
+    if (!protocol) throw new Error("Протокол не загружен");
+    const form = await api.patchProtocolForm(protocol.id, patch);
+    setProtocol((current) => current && ({ ...current, form }));
+    return form;
+  };
+
   const retry = () => {
     setError(null);
     setOperationError(null);
@@ -197,7 +216,9 @@ export default function ProtocolPage() {
   const hasIssues = uncovered > 0 || warningCount > 0;
   const draftingParty = analysis?.parties.find((p) => p.id === analysis?.drafting_party_id);
   const counterparty = analysis?.parties.find((p) => p.id !== analysis?.drafting_party_id);
-  const save = SAVE_STATUS[saveState];
+  const combinedSaveState = (["saving", "error", "dirty", "saved"] as SaveState[])
+    .find((state) => state === saveState || state === formSaveState)!;
+  const save = SAVE_STATUS[combinedSaveState];
   return (
     <WorkspaceShell wide step={3} documentId={params.id} onNavigate={(href) => { void perform(async () => { router.push(href); }, false); }}>
       <PageHeader
@@ -234,10 +255,34 @@ export default function ProtocolPage() {
         )}
       </section>
       {operationError && <Notice tone="danger" role="alert" className="mb-4">{operationError}</Notice>}
-      <ProtocolTable ref={tableRef} busy={busy} rows={protocol.rows} initialMode="focus" storageKey={protocol.id}
-        reviewContext={analysis?.drafting_party_id ?? ""} warnings={report?.warnings ?? []} onSaveStateChange={setSaveState}
-        counterpartyRole={counterparty?.role ?? ""} draftingRole={draftingParty?.role ?? ""}
-        onPatch={patch} onMerge={merge} onDelete={remove} onAddRow={addRow} onSwapParties={swap} />
+      <div role="tablist" aria-label="Раздел протокола" className="mb-5 flex gap-1 border-b border-line-c">
+        {([{ value: "clauses", label: "Правки договора" }, { value: "form", label: "Оформление" }] as const).map((item) => (
+          <button key={item.value} type="button" role="tab" id={`tab-${item.value}`} aria-selected={tab === item.value}
+            aria-controls={`panel-${item.value}`} tabIndex={tab === item.value ? 0 : -1} disabled={busy}
+            onKeyDown={(event) => {
+              if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+                event.preventDefault();
+                const next = event.key === "Home" ? "clauses" : event.key === "End" ? "form" : tab === "clauses" ? "form" : "clauses";
+                void perform(async () => { focusTab.current = next; setTab(next); }, false);
+              }
+            }}
+            onClick={() => void perform(async () => { setTab(item.value); }, false)}
+            className={cn("border-b-2 px-4 py-3 text-sm font-medium transition-colors", tab === item.value ? "border-accent text-ink" : "border-transparent text-ink-2 hover:text-ink")}>
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" id="panel-clauses" aria-labelledby="tab-clauses" hidden={tab !== "clauses"}>
+        <ProtocolTable ref={tableRef} busy={busy} rows={protocol.rows} form={protocol.form} initialMode="focus" storageKey={protocol.id}
+          reviewContext={analysis?.drafting_party_id ?? ""} warnings={report?.warnings ?? []} onSaveStateChange={setSaveState}
+          counterpartyRole={counterparty?.role ?? ""} draftingRole={draftingParty?.role ?? ""}
+          onPatch={patch} onMerge={merge} onDelete={remove} onAddRow={addRow} onSwapParties={swap} />
+      </div>
+      <div role="tabpanel" id="panel-form" aria-labelledby="tab-form" hidden={tab !== "form"}>
+        {protocol.form && <ProtocolFormEditor ref={formRef} form={protocol.form} rows={protocol.rows}
+          parties={analysis?.parties ?? []} draftingPartyId={analysis?.drafting_party_id ?? null}
+          busy={busy} active={tab === "form"} onSave={saveForm} onSaveStateChange={setFormSaveState} onSwapParties={swap} />}
+      </div>
       {exportOpen && <ExportDialog documentId={params.id} contractName={analysis?.contract_name} rowCount={protocol.rows.length} onClose={() => setExportOpen(false)} />}
     </WorkspaceShell>
   );

@@ -11,6 +11,7 @@ class Protocol(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     document_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("documents.id", ondelete="CASCADE"))
+    form_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ProtocolRow(Base):

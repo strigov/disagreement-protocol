@@ -16,6 +16,8 @@ from app.models.party import Party
 from app.models.protocol import Protocol, ProtocolRow
 from app.processing.ooxml_parser import OOXMLParser
 from app.schemas.protocol import ExportRequest, ProtocolOut, ProtocolRowCreate, ProtocolRowOut, ProtocolRowPatch
+from app.schemas.protocol_form import ProtocolForm, ProtocolFormPatch
+from app.services.protocol_form import apply_form_patch, resolve_form
 from app.services.exporter import ProtocolExporter
 from app.services.protocol_generator import BuildContext, ProtocolRowBuilder
 from app.services.clause_codec import restore_clause
@@ -103,6 +105,33 @@ def _serialize_row(row: ProtocolRow) -> ProtocolRowOut:
     )
 
 
+def _serialize_protocol(db: Session, protocol: Protocol, rows: list[ProtocolRow]) -> ProtocolOut:
+    doc = db.get(Document, protocol.document_id)
+    parties = db.query(Party).filter(Party.document_id == protocol.document_id).all()
+    return ProtocolOut(
+        id=protocol.id, document_id=protocol.document_id,
+        rows=[_serialize_row(row) for row in rows],
+        form=resolve_form(protocol, doc, parties),
+    )
+
+
+@router.patch("/protocols/{protocol_id}/form", response_model=ProtocolForm)
+def patch_form(protocol_id: uuid.UUID, payload: ProtocolFormPatch, db: Session = Depends(get_db)) -> ProtocolForm:
+    protocol = db.get(Protocol, protocol_id)
+    if protocol is None:
+        raise HTTPException(404, "Protocol not found")
+    doc = db.get(Document, protocol.document_id)
+    parties = db.query(Party).filter(Party.document_id == protocol.document_id).all()
+    if payload.signatures and not set(payload.signatures).issubset({party.id for party in parties}):
+        raise HTTPException(422, "Подпись должна относиться к стороне этого договора")
+    apply_form_patch(protocol, payload)
+    form = resolve_form(protocol, doc, parties)
+    if doc.status == DocumentStatus.EXPORTED:
+        doc.status = DocumentStatus.BUILT
+    db.commit()
+    return form
+
+
 @router.post("/documents/{document_id}/protocol", response_model=ProtocolOut, status_code=201)
 def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> ProtocolOut:
     result = db.execute(select(Document).where(Document.id == document_id).with_for_update())
@@ -161,11 +190,12 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
     built = ProtocolRowBuilder().build(changed, ctx)
 
     existing_protocols = db.query(Protocol).filter(Protocol.document_id == document_id).all()
+    saved_form = existing_protocols[0].form_json if existing_protocols else None
     for existing_protocol in existing_protocols:
         db.query(ProtocolRow).filter(ProtocolRow.protocol_id == existing_protocol.id).delete(synchronize_session=False)
     db.query(Protocol).filter(Protocol.document_id == document_id).delete()
 
-    protocol = Protocol(document_id=document_id)
+    protocol = Protocol(document_id=document_id, form_json=saved_form)
     db.add(protocol)
     db.flush()
 
@@ -202,7 +232,7 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
         .order_by(ProtocolRow.sort_order)
         .all()
     )
-    return ProtocolOut(id=protocol.id, document_id=document_id, rows=[_serialize_row(row) for row in rows])
+    return _serialize_protocol(db, protocol, rows)
 
 
 @router.patch("/protocols/{protocol_id}/rows/{row_id}", response_model=ProtocolRowOut)
@@ -304,7 +334,10 @@ def export_protocol(
         for row in rows
     ]
     refresh_validation(db, doc, rows)
-    data = ProtocolExporter().export(payload_rows, drafting.role, counterparty.role, doc.contract_name)
+    data = ProtocolExporter().export(
+        payload_rows, drafting.role, counterparty.role, doc.contract_name,
+        form=resolve_form(protocol, doc, parties), drafting_party_id=str(drafting.id),
+    )
     name = _sanitize_filename(payload.filename)
     ascii_name = _ascii_fallback(name) + ".docx"
     utf8_name = urllib.parse.quote(name + ".docx", safe="")
@@ -400,11 +433,7 @@ def get_protocol_rows(
         .order_by(ProtocolRow.sort_order)
         .all()
     )
-    return ProtocolOut(
-        id=protocol.id,
-        document_id=protocol.document_id,
-        rows=[_serialize_row(row) for row in rows],
-    )
+    return _serialize_protocol(db, protocol, rows)
 
 
 @router.get("/protocols", response_model=list[ProtocolOut])
@@ -422,11 +451,7 @@ def list_protocols_for_document(
             .all()
         )
         out.append(
-            ProtocolOut(
-                id=protocol.id,
-                document_id=protocol.document_id,
-                rows=[_serialize_row(row) for row in rows],
-            ),
+            _serialize_protocol(db, protocol, rows),
         )
     return out
 
@@ -465,8 +490,4 @@ def swap_parties(
         doc.status = DocumentStatus.BUILT
     refresh_validation(db, doc, rows)
     db.commit()
-    return ProtocolOut(
-        id=protocol.id,
-        document_id=protocol.document_id,
-        rows=[_serialize_row(row) for row in rows],
-    )
+    return _serialize_protocol(db, protocol, rows)
