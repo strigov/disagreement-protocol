@@ -23,12 +23,12 @@ export function WorkspaceShell({ children, step = 1, documentId, wide, onNavigat
   return (
     <div className="flex min-h-screen flex-col bg-bg text-ink">
       <header className="border-b border-line-c bg-bg-elev">
-        <div className="mx-auto flex h-16 max-w-screen-2xl items-center justify-between gap-4 px-4 md:px-9">
+        <div className="mx-auto flex min-h-20 max-w-screen-2xl items-center justify-between gap-3 px-4 py-3 md:gap-4 md:px-9">
           {navigate("/", <>
-            <span className="font-serif text-2xl font-semibold leading-none text-ink">Протокол</span>
-            <span className="rubric max-sm:hidden">разногласий</span>
-          </>, "-mx-2 flex items-baseline gap-2 rounded-sm px-2 py-1 transition-colors hover:bg-bg-hover")}
-          <div className="flex items-center gap-3">
+            <span className="font-serif text-xl font-semibold leading-tight text-ink sm:text-2xl">Strigov: Протокол разногласий</span>
+            <span className="font-serif text-sm leading-tight text-ink-2">{"It's just Strigov's"}</span>
+          </>, "-mx-2 flex min-w-0 flex-col items-start gap-0.5 rounded-sm px-2 py-1 text-left transition-colors hover:bg-bg-hover")}
+          <div className="flex shrink-0 items-center gap-3">
             <span className="flex items-center gap-1.5 text-xs text-ink-2">
               <Icon name="lock-keyhole" className="text-ink-2" />
               <span className="max-md:sr-only">Документы остаются на вашем компьютере</span>
