@@ -289,7 +289,7 @@ async def test_patch_parties_rejects_duplicate_existing_party_ids_without_db_cha
         )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "Duplicate party ids in payload"}
+    assert response.json() == {"detail": "Одна сторона указана дважды. Выберите две разные стороны договора."}
     assert doc.status == original_status
     assert doc.drafting_party_id == original_drafting_party_id
     assert (party.id, party.name, party.role, party.confidence) == original_party_state
@@ -310,7 +310,7 @@ async def test_patch_parties_rejects_empty_parties_without_db_changes(parsed_doc
         )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "Exactly 2 parties are required"}
+    assert response.json() == {"detail": "Укажите две стороны договора."}
     assert doc.status == original_status
     assert db.parties == original_parties
     assert party in db.parties
@@ -337,7 +337,7 @@ async def test_patch_parties_rejects_unknown_drafting_party_without_db_changes(p
         )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "drafting_party_id must reference one of the confirmed parties"}
+    assert response.json() == {"detail": "Выберите вашу сторону из указанных сторон договора."}
     assert doc.status == original_status
     assert doc.drafting_party_id == original_drafting_party_id
     assert db.parties == original_parties
@@ -372,7 +372,7 @@ async def test_patch_parties_rejects_drafting_party_id_when_payload_only_matches
         )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "drafting_party_id must reference one of the confirmed parties"}
+    assert response.json() == {"detail": "Выберите вашу сторону из указанных сторон договора."}
     assert doc.status == original_status
     assert doc.drafting_party_id == original_drafting_party_id
     assert db.parties == original_parties
@@ -404,7 +404,7 @@ async def test_patch_parties_rejects_payload_id_for_new_drafting_party_without_d
         )
 
     assert response.status_code == 422
-    assert response.json() == {"detail": "drafting_party_id must reference one of the confirmed parties"}
+    assert response.json() == {"detail": "Выберите вашу сторону из указанных сторон договора."}
     assert doc.status == original_status
     assert doc.drafting_party_id == original_drafting_party_id
     assert db.parties == original_parties

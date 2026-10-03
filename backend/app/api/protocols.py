@@ -119,7 +119,7 @@ def _serialize_protocol(db: Session, protocol: Protocol, rows: list[ProtocolRow]
 def patch_form(protocol_id: uuid.UUID, payload: ProtocolFormPatch, db: Session = Depends(get_db)) -> ProtocolForm:
     protocol = db.get(Protocol, protocol_id)
     if protocol is None:
-        raise HTTPException(404, "Protocol not found")
+        raise HTTPException(404, "Протокол не найден. Откройте договор заново.")
     doc = db.get(Document, protocol.document_id)
     parties = db.query(Party).filter(Party.document_id == protocol.document_id).all()
     if payload.signatures and not set(payload.signatures).issubset({party.id for party in parties}):
@@ -137,18 +137,18 @@ def build_protocol(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Pro
     result = db.execute(select(Document).where(Document.id == document_id).with_for_update())
     doc = result.scalar_one_or_none()
     if doc is None:
-        raise HTTPException(404, "Document not found")
+        raise HTTPException(404, "Договор не найден. Откройте исходный файл заново.")
     if doc.drafting_party_id is None:
-        raise HTTPException(409, "Drafting party not set")
+        raise HTTPException(409, "Укажите, от чьего имени составляется протокол.")
 
     parties = db.query(Party).filter(Party.document_id == document_id).all()
     if len(parties) != 2:
-        raise HTTPException(409, "MVP supports exactly two parties")
+        raise HTTPException(409, "Для составления протокола нужны две стороны договора.")
 
     drafting = next((p for p in parties if p.id == doc.drafting_party_id), None)
     counterparty = next((p for p in parties if p.id != doc.drafting_party_id), None)
     if drafting is None or counterparty is None:
-        raise HTTPException(409, "Drafting party not found")
+        raise HTTPException(409, "Выбранная сторона не найдена. Проверьте стороны договора.")
 
     clause_models = (
         db.query(ClauseModel)
@@ -244,7 +244,7 @@ def patch_row(
 ) -> ProtocolRowOut:
     row = db.get(ProtocolRow, row_id)
     if row is None or row.protocol_id != protocol_id:
-        raise HTTPException(404, "Row not found")
+        raise HTTPException(404, "Строка протокола не найдена. Откройте протокол заново.")
 
     if payload.merge_with in ("previous", "next"):
         siblings = (
@@ -260,7 +260,7 @@ def patch_row(
         elif payload.merge_with == "next" and 0 <= index < len(siblings) - 1:
             target = siblings[index + 1]
         if target is None:
-            raise HTTPException(409, "No neighbouring row to merge with")
+            raise HTTPException(409, "Рядом нет строки для объединения.")
 
         first, second = (target, row) if payload.merge_with == "previous" else (row, target)
         origins = list(dict.fromkeys([*source_keys(first), *source_keys(second)]))
@@ -306,17 +306,17 @@ def export_protocol(
 ) -> Response:
     doc = db.get(Document, document_id)
     if doc is None:
-        raise HTTPException(404, "Document not found")
+        raise HTTPException(404, "Договор не найден. Откройте исходный файл заново.")
 
     parties = db.query(Party).filter(Party.document_id == document_id).all()
     drafting = next((party for party in parties if party.id == doc.drafting_party_id), None)
     counterparty = next((party for party in parties if party.id != doc.drafting_party_id), None) if drafting else None
     if drafting is None or counterparty is None:
-        raise HTTPException(409, "Parties not finalized")
+        raise HTTPException(409, "Подтвердите стороны договора перед сохранением протокола.")
 
     protocol = db.query(Protocol).filter(Protocol.document_id == document_id).one_or_none()
     if protocol is None:
-        raise HTTPException(409, "Protocol not built")
+        raise HTTPException(409, "Сначала сформируйте протокол.")
 
     rows = (
         db.query(ProtocolRow)
@@ -361,7 +361,7 @@ def add_row(
 ) -> ProtocolRowOut:
     protocol = db.get(Protocol, protocol_id)
     if protocol is None:
-        raise HTTPException(404, "Protocol not found")
+        raise HTTPException(404, "Протокол не найден. Откройте договор заново.")
 
     existing = (
         db.query(ProtocolRow)
@@ -404,7 +404,7 @@ def delete_row(
 ) -> Response:
     row = db.get(ProtocolRow, row_id)
     if row is None or row.protocol_id != protocol_id:
-        raise HTTPException(404, "Row not found")
+        raise HTTPException(404, "Строка протокола не найдена. Откройте протокол заново.")
 
     db.delete(row)
     rest = (
@@ -426,7 +426,7 @@ def get_protocol_rows(
 ) -> ProtocolOut:
     protocol = db.get(Protocol, protocol_id)
     if protocol is None:
-        raise HTTPException(404, "Protocol not found")
+        raise HTTPException(404, "Протокол не найден. Откройте договор заново.")
     rows = (
         db.query(ProtocolRow)
         .filter(ProtocolRow.protocol_id == protocol_id)
@@ -463,20 +463,20 @@ def swap_parties(
 ) -> ProtocolOut:
     protocol = db.get(Protocol, protocol_id)
     if protocol is None:
-        raise HTTPException(404, "Protocol not found")
+        raise HTTPException(404, "Протокол не найден. Откройте договор заново.")
 
     doc = db.get(Document, protocol.document_id)
     if doc is None:
-        raise HTTPException(404, "Document not found")
+        raise HTTPException(404, "Договор не найден. Откройте исходный файл заново.")
 
     parties = db.query(Party).filter(Party.document_id == doc.id).all()
     if len(parties) != 2:
-        raise HTTPException(409, "Swap requires exactly two parties")
+        raise HTTPException(409, "Чтобы поменять стороны местами, укажите две стороны договора.")
 
     old_drafting = next((party for party in parties if party.id == doc.drafting_party_id), None)
     other = next((party for party in parties if party.id != doc.drafting_party_id), None)
     if old_drafting is None or other is None:
-        raise HTTPException(409, "Drafting party not set")
+        raise HTTPException(409, "Укажите, от чьего имени составляется протокол.")
 
     rows = (
         db.query(ProtocolRow)

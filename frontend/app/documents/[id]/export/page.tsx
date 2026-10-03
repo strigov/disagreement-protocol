@@ -15,7 +15,7 @@ export default function ExportPage() {
       <Link className={buttonClassName({ variant: "ghost", size: "sm", className: "mb-8" })} href={`/documents/${params.id}/protocol`}>
         <Icon name="arrow-left" /> Вернуться к протоколу
       </Link>
-      <PageHeader rubric="Экспорт DOCX" title="Экспорт" description="Сохраните протокол разногласий в формате DOCX." />
+      <PageHeader rubric="Документ Word" title="Сохранение протокола" description="Сохраните протокол разногласий в формате DOCX." />
       <div className="mt-8 rounded-md border border-line-c bg-bg-elev p-6 shadow-sm">
         <ExportForm documentId={params.id} />
       </div>

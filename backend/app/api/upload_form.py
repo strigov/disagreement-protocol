@@ -35,12 +35,12 @@ class SingleFileParser(MultiPartParser):
     def on_headers_finished(self):
         super().on_headers_finished()
         if self._current_part.field_name != "file" or self._current_part.file is None:
-            raise MultiPartException("Требуется ровно один файл в поле file")
+            raise MultiPartException("Выберите один файл договора.")
 
     def on_part_data(self, data, start, end):
         self.file_bytes += end - start
         if self.file_bytes > self.max_bytes:
-            raise UploadLimitError("Размер файла превышает 25 MB")
+            raise UploadLimitError("Размер файла превышает 25 МБ")
         super().on_part_data(data, start, end)
 
     def on_end(self):

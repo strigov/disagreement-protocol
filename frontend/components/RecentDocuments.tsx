@@ -33,10 +33,7 @@ export function RecentDocuments() {
 
   return (
     <section aria-labelledby="recent-documents-title" className="mt-14">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h2 id="recent-documents-title" className="font-serif text-xl font-semibold text-ink">недавние документы</h2>
-        <p className="text-xs text-ink-2">Список хранится только в этом браузере.</p>
-      </div>
+      <h2 id="recent-documents-title" className="font-serif text-xl font-semibold text-ink">недавние документы</h2>
       <ul className="mt-4 overflow-hidden rounded-md border border-line-c bg-bg-elev shadow-sm">
         {items.map((item) => {
           const title = item.title ?? UNTITLED;

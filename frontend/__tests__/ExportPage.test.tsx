@@ -26,7 +26,7 @@ afterAll(() => {
 
 test("renders form with default filename and submit button", () => {
   render(<ExportPage />);
-  expect(screen.getByRole("heading", { name: "Экспорт" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Сохранение протокола" })).toBeInTheDocument();
   expect(screen.getByDisplayValue("Протокол разногласий")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
   expect(screen.getByText(/Протокол разногласий\.docx/)).toBeInTheDocument();

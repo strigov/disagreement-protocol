@@ -56,7 +56,7 @@ test("loads existing parties, builds protocol when none exists, navigates", asyn
 
   render(<RoutedPage params={{ id: "doc-1" }} />);
 
-  expect(screen.getByText("Загружаем…")).toBeInTheDocument();
+  expect(screen.getByText("Читаем сведения о сторонах…")).toBeInTheDocument();
 
   expect(await screen.findByText("Стороны договора")).toBeInTheDocument();
   expect(screen.getByDisplayValue("ООО А")).toBeInTheDocument();
@@ -189,7 +189,7 @@ test("a failed load shows an error with «Повторить» that loads the pa
 
   render(<RoutedPage params={{ id: "doc-1" }} />);
 
-  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось загрузить стороны");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось прочитать сведения о сторонах");
   expect(screen.getByRole("alert")).toHaveTextContent(/500 boom/);
   expect(screen.queryByText("Стороны договора")).not.toBeInTheDocument();
   expect(calls).toBe(1);
@@ -214,13 +214,13 @@ test("does not show «Стороны договора» while the parties are st
 
   render(<RoutedPage params={{ id: "doc-1" }} />);
 
-  expect(screen.getByText("Загружаем…")).toBeInTheDocument();
+  expect(screen.getByText("Читаем сведения о сторонах…")).toBeInTheDocument();
   expect(screen.queryByText("Стороны договора")).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: BUILD })).not.toBeInTheDocument();
 
   release();
   expect(await screen.findByText("Стороны договора")).toBeInTheDocument();
-  expect(screen.queryByText("Загружаем…")).not.toBeInTheDocument();
+  expect(screen.queryByText("Читаем сведения о сторонах…")).not.toBeInTheDocument();
 });
 
 test("a failed build keeps the form and shows the error next to it", async () => {

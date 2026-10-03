@@ -33,7 +33,7 @@ def validate_upload(filename: str, data: bytes) -> None:
     if not filename.lower().endswith(".docx"):
         raise IngestError(400, "Поддерживаются только файлы .docx без макросов")
     if len(data) > MAX_BYTES:
-        raise IngestError(413, "Размер файла превышает 25 MB")
+        raise IngestError(413, "Размер файла превышает 25 МБ")
     try:
         with DocxPackage(data):
             pass

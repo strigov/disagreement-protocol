@@ -23,7 +23,7 @@ export function EmptyState({ icon, text, cta, card = false, className }: {
 }
 
 export function ErrorState({
-  title, titleLevel = 2, text = "Не удалось загрузить данные. Попробуйте ещё раз.",
+  title, titleLevel = 2, text = "Не удалось прочитать данные. Попробуйте ещё раз.",
   onRetry, retryLabel = "Повторить", actions, card = true, className,
 }: {
   title?: ReactNode; titleLevel?: 1 | 2; text?: ReactNode;

@@ -9,7 +9,7 @@ export function ExportDialog({ documentId, contractName, rowCount, onClose }: {
 }) {
   const [busy, setBusy] = useState(false);
   // Пока файл готовится, закрыть диалог нельзя: Esc и крестик заблокированы.
-  return <Dialog title="Скачать протокол" closeLabel="Закрыть экспорт" dismissible={!busy} onClose={onClose}>
+  return <Dialog title="Сохранить протокол" closeLabel="Закрыть сохранение" dismissible={!busy} onClose={onClose}>
     <ExportForm documentId={documentId} contractName={contractName} rowCount={rowCount} onBusyChange={setBusy} />
   </Dialog>;
 }

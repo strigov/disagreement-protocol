@@ -65,7 +65,7 @@ test("failed save blocks export and navigation while preserving all draft fields
   render(<ProtocolPage />);
   await openForm();
   fireEvent.change(screen.getByLabelText("Место составления"), { target: { value: "Казань" } });
-  await userEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+  await userEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
   await screen.findByText(/Не удалось сохранить оформление:/);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Место составления")).toHaveValue("Казань");
@@ -73,8 +73,8 @@ test("failed save blocks export and navigation while preserving all draft fields
   expect(screen.getByRole("tab", { name: "Оформление" })).toHaveAttribute("aria-selected", "true");
   expect(push).not.toHaveBeenCalled();
   server.use(http.patch("/api/protocols/p1/form", () => HttpResponse.json({ ...FORM, place: "Казань" })));
-  await userEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
-  expect(await screen.findByRole("dialog", { name: "Скачать протокол" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
+  expect(await screen.findByRole("dialog", { name: "Сохранить протокол" })).toBeInTheDocument();
 });
 
 test("export waits for an already pending form save without issuing a second PATCH", async () => {
@@ -87,10 +87,10 @@ test("export waits for an already pending form save without issuing a second PAT
   fireEvent.change(screen.getByLabelText("Дата протокола"), { target: { value: "02.10.2026" } });
   await userEvent.click(screen.getByRole("button", { name: "Сохранить оформление" }));
   await waitFor(() => expect(calls).toBe(1));
-  await userEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+  await userEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   await act(async () => release());
-  expect(await screen.findByRole("dialog", { name: "Скачать протокол" })).toBeInTheDocument();
+  expect(await screen.findByRole("dialog", { name: "Сохранить протокол" })).toBeInTheDocument();
   expect(calls).toBe(1);
 });
 

@@ -81,7 +81,7 @@ export default function ProtocolPage() {
           if (!cancelled && version === analysisVersion.current) setAnalysis(a);
           if (!cancelled) rememberDocument({ id: params.id, title: a.contract_name, stage: "protocol" });
         } catch {
-          if (!cancelled) setOperationError("Не удалось получить проверку полноты. Повторите действие после восстановления связи.");
+          if (!cancelled) setOperationError("Не удалось проверить полноту протокола. Повторите проверку.");
         }
       } catch (e) {
         if (!cancelled) setError((e as Error).message);
@@ -100,7 +100,7 @@ export default function ProtocolPage() {
     } catch {
       if (version === analysisVersion.current) {
         setAnalysis((current) => current && ({ ...current, validation_report: null }));
-        setOperationError("Строки сохранены, но проверка полноты недоступна. Повторите действие после восстановления связи.");
+        setOperationError("Строки сохранены, но не удалось проверить полноту протокола. Повторите проверку.");
       }
     }
   };
@@ -189,7 +189,7 @@ export default function ProtocolPage() {
 
   if (error) return (
     <WorkspaceShell step={3} documentId={params.id}>
-      <ErrorState titleLevel={1} title="Не удалось загрузить протокол" text={error} onRetry={retry} />
+      <ErrorState titleLevel={1} title="Не удалось открыть протокол" text={error} onRetry={retry} />
     </WorkspaceShell>
   );
   if (!protocol) return (
@@ -226,13 +226,13 @@ export default function ProtocolPage() {
         title="Протокол разногласий"
         meta={<>
           {analysis?.contract_name && <span className="flex min-w-0 items-center gap-1.5 text-ink-1"><Icon name="file-text" className="text-ink-2" /><span className="wrap-anywhere">{analysis.contract_name}</span></span>}
-          <span className="flex items-center gap-1.5"><span className="rubric">Наша сторона</span><strong className="font-medium text-ink">{draftingParty?.name || draftingParty?.role || "загружаем…"}</strong></span>
+          <span className="flex items-center gap-1.5"><span className="rubric">Наша сторона</span><strong className="font-medium text-ink">{draftingParty?.name || draftingParty?.role || "определяем…"}</strong></span>
           <span className="flex items-center gap-1.5 text-ink-1" aria-live="polite"><Icon name={save.icon} className={save.className} />{save.label}</span>
         </>}
         actions={
-          <Button variant="primary" disabled={busy} aria-busy={busy || undefined} aria-label="Экспорт DOCX"
+          <Button variant="primary" disabled={busy} aria-busy={busy || undefined}
             onClick={() => { void perform(async () => { setExportOpen(true); }, false); }}>
-            <Icon name="download" size={16} />Скачать DOCX
+            <Icon name="download" size={16} />Сохранить DOCX
           </Button>
         }
       />

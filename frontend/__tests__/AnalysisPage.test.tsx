@@ -182,7 +182,7 @@ test("failed document shows the reason reported by the backend", async () => {
   ).toBeInTheDocument();
   expect(screen.getByRole("alert")).toHaveTextContent("Документ не удалось обработать");
   expect(screen.queryByText("Ошибка обработки документа")).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Загрузить другой документ" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: "Открыть другой документ" })).toHaveAttribute(
     "href",
     "/",
   );
@@ -212,7 +212,7 @@ test.each([
   expect(await screen.findByText("Ошибка обработки документа")).toBeInTheDocument();
 });
 
-test("unknown status names itself instead of spinning", async () => {
+test("unknown status offers recovery instead of spinning", async () => {
   server.use(
     http.get("/api/documents/doc-x/analysis", () =>
       HttpResponse.json({ ...baseAnalysis, id: "doc-x", status: "quarantined" }),
@@ -221,7 +221,7 @@ test("unknown status names itself instead of spinning", async () => {
 
   render(<RoutedPage params={{ id: "doc-x" }} />);
 
-  expect(await screen.findByText(/Сервер вернул статус «quarantined»/)).toBeInTheDocument();
+  expect(await screen.findByText("Повторите попытку. Если ошибка повторится, откройте исходный файл заново.")).toBeInTheDocument();
   expect(screen.queryByText("Анализируем документ…")).not.toBeInTheDocument();
 });
 
@@ -235,7 +235,7 @@ test("surfaces fetch error", async () => {
   render(<RoutedPage params={{ id: "doc-4" }} />);
 
   await waitFor(() => expect(screen.getByText(/500 nope/)).toBeInTheDocument());
-  expect(screen.getByRole("alert")).toHaveTextContent("Не удалось загрузить анализ");
+  expect(screen.getByRole("alert")).toHaveTextContent("Не удалось получить результаты обработки");
 });
 
 test("shows only the FastAPI detail when the analysis request fails", async () => {
@@ -265,7 +265,7 @@ test("«Повторить» asks again once after a failed request and continue
 
   render(<RoutedPage params={{ id: "doc-retry" }} />);
 
-  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось загрузить анализ");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось получить результаты обработки");
   // The failure is final until the user asks: no automatic retry.
   await waitPastPollInterval();
   expect(calls).toBe(1);
@@ -297,7 +297,7 @@ test("a failed document offers no retry and is remembered as an analysis stage",
 
   expect(await screen.findByRole("alert")).toHaveTextContent("Документ не удалось обработать");
   expect(screen.queryByRole("button", { name: "Повторить" })).not.toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Загрузить другой документ" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Открыть другой документ" })).toBeInTheDocument();
   expect(readRecentDocuments()).toEqual([
     { id: "doc-failed", title: "Договор аренды", stage: "analysis", openedAt: expect.any(Number) },
   ]);
@@ -314,7 +314,7 @@ test("an unknown status can be retried", async () => {
 
   render(<RoutedPage params={{ id: "doc-odd" }} />);
 
-  expect(await screen.findByRole("alert")).toHaveTextContent("Неизвестный статус документа");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось определить этап обработки");
   await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
   await waitFor(() => expect(push).toHaveBeenCalledWith("/documents/doc-odd/parties"));
   expect(calls).toBe(2);

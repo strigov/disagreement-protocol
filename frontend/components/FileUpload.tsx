@@ -40,7 +40,7 @@ export function FileUpload() {
     event.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
-    if (event.dataTransfer.files.length > 1) { setError("Загрузите один договор за раз."); return; }
+    if (event.dataTransfer.files.length > 1) { setError("Выберите один договор за раз."); return; }
     const file = event.dataTransfer.files[0];
     if (file) void handle(file);
   };
@@ -78,9 +78,7 @@ export function FileUpload() {
         Выбрать файл <Icon name="arrow-up-right" />
         <input className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Выбрать файл" type="file" accept=".docx" disabled={busy} onChange={onPick} />
       </label>
-      {busy
-        ? <p className="mt-4 max-w-full text-xs text-ink-2 wrap-anywhere" role="status">Загружаем… {filename}</p>
-        : <p className="mt-4 text-xs text-ink-2">Обработка и хранение — только на вашем компьютере</p>}
+      {busy && <p className="mt-4 max-w-full text-xs text-ink-2 wrap-anywhere" role="status">Открываем… {filename}</p>}
       {error && <Notice tone="danger" role="alert" className="mt-6 w-full max-w-xl text-left">{error}</Notice>}
     </div>
   );

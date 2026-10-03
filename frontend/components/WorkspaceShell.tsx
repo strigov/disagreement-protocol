@@ -29,10 +29,6 @@ export function WorkspaceShell({ children, step = 1, documentId, wide, onNavigat
             <span className="font-serif text-sm leading-tight text-ink-2">{"It's just Strigov's"}</span>
           </>, "-mx-2 flex min-w-0 flex-col items-start gap-0.5 rounded-sm px-2 py-1 text-left transition-colors hover:bg-bg-hover")}
           <div className="flex shrink-0 items-center gap-3">
-            <span className="flex items-center gap-1.5 text-xs text-ink-2">
-              <Icon name="lock-keyhole" className="text-ink-2" />
-              <span className="max-md:sr-only">Документы остаются на вашем компьютере</span>
-            </span>
             <ThemeToggle />
           </div>
         </div>

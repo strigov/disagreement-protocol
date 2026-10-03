@@ -44,7 +44,7 @@ function createRequestHandler({ uiDir, backendURL, token, fetchBackend = fetch }
         responseHeaders.set('cache-control', 'no-store');
         return new Response(response.body, { status: response.status, headers: responseHeaders });
       } catch {
-        return Response.json({ detail: 'Движок недоступен. Перезапустите приложение.' }, { status: 503 });
+        return Response.json({ detail: 'Не удалось выполнить операцию. Перезапустите приложение.' }, { status: 503 });
       }
     }
     if (!['GET', 'HEAD'].includes(request.method)) return new Response('', { status: 405 });

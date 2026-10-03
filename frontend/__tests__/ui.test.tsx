@@ -14,13 +14,13 @@ test("dialog is named by its title, closes on cancel and returns focus", async (
     const [open, setOpen] = useState(false);
     return <>
       <Button variant="primary" onClick={() => setOpen(true)}>Открыть</Button>
-      {open && <Dialog title="Скачать протокол" onClose={() => { onClose(); setOpen(false); }}>Содержимое</Dialog>}
+      {open && <Dialog title="Сохранить протокол" onClose={() => { onClose(); setOpen(false); }}>Содержимое</Dialog>}
     </>;
   }
   render(<Harness />);
   const opener = screen.getByRole("button", { name: "Открыть" });
   await userEvent.click(opener);
-  const dialog = screen.getByRole("dialog", { name: "Скачать протокол" });
+  const dialog = screen.getByRole("dialog", { name: "Сохранить протокол" });
   fireEvent(dialog, new Event("cancel", { cancelable: true }));
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

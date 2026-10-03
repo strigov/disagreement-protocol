@@ -116,7 +116,7 @@ export const ProtocolFormEditor = forwardRef<ProtocolFormHandle, {
       <section aria-label="Поля оформления" className="min-w-0 space-y-5">
         <div>
           <h2 className="font-serif text-2xl font-semibold text-ink">Оформление протокола</h2>
-          <p className="mt-1 text-sm leading-relaxed text-ink-2">Заполните шапку и подписи или вставьте свой текст. Изменения сохраняются кнопкой ниже, при переходе к правкам и перед скачиванием DOCX.</p>
+          <p className="mt-1 text-sm leading-relaxed text-ink-2">Заполните шапку и подписи или вставьте свой текст. Изменения сохраняются кнопкой ниже, при переходе к правкам и перед сохранением DOCX.</p>
         </div>
         <fieldset disabled={busy || saving} className="space-y-5 disabled:opacity-60">
           <div className="space-y-4 rounded-lg border border-line-c bg-bg-elev p-5">

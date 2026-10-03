@@ -169,7 +169,7 @@ test("surfaces error when build fails", async () => {
 
   render(<ProtocolPage />);
   await waitFor(() =>
-    expect(screen.getByText("Не удалось загрузить протокол")).toBeInTheDocument(),
+    expect(screen.getByText("Не удалось открыть протокол")).toBeInTheDocument(),
   );
   expect(screen.getByText(/500 oops/)).toBeInTheDocument();
 });
@@ -188,8 +188,8 @@ test("export opens a dialog without leaving the editor", async () => {
   render(<ProtocolPage />);
   await screen.findByText("1.1");
 
-  await userEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
-  expect(await screen.findByRole("dialog", { name: "Скачать протокол" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
+  expect(await screen.findByRole("dialog", { name: "Сохранить протокол" })).toBeInTheDocument();
   expect(push).not.toHaveBeenCalled();
 });
 
@@ -419,7 +419,7 @@ test("load error offers a retry that reuses the existing protocol", async () => 
   );
 
   render(<ProtocolPage />);
-  expect(await screen.findByRole("heading", { name: "Не удалось загрузить протокол" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Не удалось открыть протокол" })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
   await screen.findByText("1.1");
   expect(buildCalled).toBe(false);

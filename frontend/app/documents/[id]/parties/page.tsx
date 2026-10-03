@@ -104,7 +104,7 @@ export default function PartiesPage() {
     <WorkspaceShell step={2} documentId={params.id}>
       <ErrorState
         titleLevel={1}
-        title="Не удалось загрузить стороны"
+        title="Не удалось прочитать сведения о сторонах"
         text={loadError}
         onRetry={() => { setLoadError(null); setAttempt((n) => n + 1); }}
         className="max-w-2xl"
@@ -115,7 +115,7 @@ export default function PartiesPage() {
   if (!analysis) return (
     <WorkspaceShell step={2} documentId={params.id}>
       <div aria-busy="true">
-        <p className="mb-6 text-sm text-ink-2">Загружаем…</p>
+        <p className="mb-6 text-sm text-ink-2">Читаем сведения о сторонах…</p>
         <div className="grid gap-4 md:grid-cols-2">
           {[0, 1].map((key) => (
             <div key={key} className="rounded-md border border-line-c bg-bg-elev p-4 shadow-sm">

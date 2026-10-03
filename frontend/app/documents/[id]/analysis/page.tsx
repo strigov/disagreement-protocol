@@ -84,15 +84,15 @@ export default function AnalysisPage() {
         }
         if (mode === undefined) {
           setError({
-            title: "Неизвестный статус документа",
-            detail: `Сервер вернул статус «${a.status}». Обновите страницу или загрузите документ заново.`,
+            title: "Не удалось определить этап обработки",
+            detail: "Повторите попытку. Если ошибка повторится, откройте исходный файл заново.",
             retry: true,
           });
         }
       } catch (e) {
         if (!cancelled) {
           setError({
-            title: "Не удалось загрузить анализ",
+            title: "Не удалось получить результаты обработки",
             detail: (e as Error).message,
             retry: true,
           });
@@ -120,7 +120,7 @@ export default function AnalysisPage() {
         title={error.title}
         text={error.detail}
         onRetry={error.retry ? retry : undefined}
-        actions={<Link href="/" className={buttonClassName({ variant: "ghost", size: "sm" })}>Загрузить другой документ</Link>}
+        actions={<Link href="/" className={buttonClassName({ variant: "ghost", size: "sm" })}>Открыть другой документ</Link>}
         className="max-w-2xl"
       />
     </WorkspaceShell>

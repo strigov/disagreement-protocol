@@ -1,6 +1,6 @@
 {
   "name": "disagreement-protocol-desktop",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "description": "Локальное приложение для протоколов разногласий из договоров Word",
   "author": "strigov",

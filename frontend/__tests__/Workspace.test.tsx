@@ -96,7 +96,7 @@ test("local storage failure does not prevent reviewing a clause", async () => {
   render(<ProtocolTable {...props} initialMode="focus" rows={[first]} storageKey="test" onPatch={vi.fn()} />);
   await userEvent.click(screen.getByRole("checkbox", { name: "Проверено мной" }));
   expect(screen.getByRole("checkbox", { name: "Проверено мной" })).toBeChecked();
-  expect(screen.getByText("Отметки доступны только до закрытия страницы.")).toBeInTheDocument();
+  expect(screen.getByText("Не удалось сохранить отметки проверки. При повторном открытии договора они могут быть потеряны.")).toBeInTheDocument();
   spy.mockRestore();
 });
 

@@ -93,7 +93,7 @@ def recover_interrupted_documents(db) -> int:
     ).all()
     for doc in documents:
         doc.status = DocumentStatus.FAILED
-        doc.error_message = "Обработка прервана перезапуском приложения. Загрузите документ повторно."
+        doc.error_message = "Обработка прервана перезапуском приложения. Откройте исходный файл заново."
         doc.updated_at = datetime.now(UTC)
     db.commit()
     return len(documents)

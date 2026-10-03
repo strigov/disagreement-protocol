@@ -16,7 +16,7 @@ router = APIRouter(prefix="/api/files", tags=["files"])
 def download_input(document_id: uuid.UUID, db: Session = Depends(get_db)) -> Response:
     doc = db.get(Document, document_id)
     if doc is None:
-        raise HTTPException(404, "Document not found")
+        raise HTTPException(404, "Договор не найден. Откройте исходный файл заново.")
 
     data = FileStorage().get(doc.storage_key)
     return Response(

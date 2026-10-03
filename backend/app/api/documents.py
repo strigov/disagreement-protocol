@@ -43,7 +43,7 @@ async def upload_document(
     try:
         file = form.get("file")
         if len(form.multi_items()) != 1 or not isinstance(file, UploadFile):
-            raise HTTPException(400, "Требуется ровно один файл в поле file")
+            raise HTTPException(400, "Выберите один файл договора.")
         return await run_in_threadpool(_store_upload, file, background_tasks, db)
     finally:
         await form.close()
@@ -56,7 +56,7 @@ def _store_upload(file: UploadFile, background_tasks: BackgroundTasks, db: Sessi
 
     data = file.file.read(MAX_BYTES + 1)
     if len(data) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Размер файла превышает 25 MB")
+        raise HTTPException(status_code=413, detail="Размер файла превышает 25 МБ")
 
     try:
         validate_upload(filename, data)
@@ -83,7 +83,7 @@ def _store_upload(file: UploadFile, background_tasks: BackgroundTasks, db: Sessi
 def get_analysis(document_id: uuid.UUID, db: Session = Depends(get_db)) -> AnalysisOut:
     doc = db.get(Document, document_id)
     if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="Договор не найден. Откройте исходный файл заново.")
 
     parties = db.query(Party).filter(Party.document_id == document_id).all()
     if doc.validation_report is not None:
@@ -113,15 +113,15 @@ def update_parties(
 ) -> AnalysisOut:
     doc = db.get(Document, document_id)
     if doc is None:
-        raise HTTPException(status_code=404, detail="Document not found")
+        raise HTTPException(status_code=404, detail="Договор не найден. Откройте исходный файл заново.")
 
     existing = {party.id: party for party in db.query(Party).filter(Party.document_id == document_id).all()}
     if len(payload.parties) != 2:
-        raise HTTPException(status_code=422, detail="Exactly 2 parties are required")
+        raise HTTPException(status_code=422, detail="Укажите две стороны договора.")
 
     existing_payload_ids = [item.id for item in payload.parties if item.id is not None and item.id in existing]
     if len(existing_payload_ids) != len(set(existing_payload_ids)):
-        raise HTTPException(status_code=422, detail="Duplicate party ids in payload")
+        raise HTTPException(status_code=422, detail="Одна сторона указана дважды. Выберите две разные стороны договора.")
 
     drafting_party = existing.get(payload.drafting_party_id) if payload.drafting_party_id is not None else None
     if payload.drafting_party_id is not None:
@@ -133,7 +133,7 @@ def update_parties(
         if not drafting_party_matches:
             raise HTTPException(
                 status_code=422,
-                detail="drafting_party_id must reference one of the confirmed parties",
+                detail="Выберите вашу сторону из указанных сторон договора.",
             )
 
     if payload.drafting_party_id is None:

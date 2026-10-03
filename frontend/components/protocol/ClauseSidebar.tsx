@@ -68,7 +68,7 @@ export function ClauseSidebar({
         <div aria-hidden="true" className="my-2 h-1 overflow-hidden rounded-pill bg-bg-active max-md:hidden">
           <div className="h-full rounded-pill bg-ok transition-all" style={{ width: `${percent}%` }} />
         </div>
-        <p className="leading-relaxed">{storageNotice ? "Отметки доступны только до закрытия страницы." : "Отметки сохраняются в этом браузере."}</p>
+        {storageNotice && <p className="leading-relaxed text-warn" role="alert">Не удалось сохранить отметки проверки. При повторном открытии договора они могут быть потеряны.</p>}
       </div>
     </aside>
   );

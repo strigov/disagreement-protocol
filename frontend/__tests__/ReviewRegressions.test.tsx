@@ -60,11 +60,11 @@ test("export waits for pending save then opens the download dialog", async () =>
   await editPoint();
   fireEvent.blur(screen.getByDisplayValue("9.9"));
   await waitFor(() => expect(api.patchRow).toHaveBeenCalledOnce());
-  await userEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+  await userEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
   expect(push).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "Экспорт DOCX" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Сохранить DOCX" })).toBeDisabled();
   await act(async () => { gate.resolve({ ...ROW, point_label: "9.9" }); });
-  expect(await screen.findByRole("dialog", { name: "Скачать протокол" })).toBeInTheDocument();
+  expect(await screen.findByRole("dialog", { name: "Сохранить протокол" })).toBeInTheDocument();
   expect(push).not.toHaveBeenCalled();
   expect(api.patchRow).toHaveBeenCalledTimes(1);
 });
@@ -73,8 +73,8 @@ test("export flushes active draft even when no blur event occurs", async () => {
   vi.mocked(api.patchRow).mockResolvedValue({ ...ROW, point_label: "9.9" });
   render(<ProtocolPage />);
   await editPoint();
-  fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
-  expect(await screen.findByRole("dialog", { name: "Скачать протокол" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
+  expect(await screen.findByRole("dialog", { name: "Сохранить протокол" })).toBeInTheDocument();
   expect(push).not.toHaveBeenCalled();
   expect(api.patchRow).toHaveBeenCalledWith("p1", "r1", { point_label: "9.9" });
 });
@@ -84,14 +84,14 @@ test("failed save prevents export and keeps draft for retry", async () => {
   vi.mocked(api.patchRow).mockReturnValue(gate.promise);
   render(<ProtocolPage />);
   await editPoint();
-  fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
+  fireEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
   await waitFor(() => expect(api.patchRow).toHaveBeenCalledOnce());
   await act(async () => { gate.reject(new Error("offline")); });
   expect(push).not.toHaveBeenCalled();
   expect(screen.getByDisplayValue("9.9")).toBeInTheDocument();
   vi.mocked(api.patchRow).mockResolvedValue({ ...ROW, point_label: "9.9" });
-  fireEvent.click(screen.getByRole("button", { name: "Экспорт DOCX" }));
-  expect(await screen.findByRole("dialog", { name: "Скачать протокол" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Сохранить DOCX" }));
+  expect(await screen.findByRole("dialog", { name: "Сохранить протокол" })).toBeInTheDocument();
   expect(push).not.toHaveBeenCalled();
 });
 

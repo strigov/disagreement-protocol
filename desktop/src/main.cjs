@@ -71,7 +71,7 @@ else {
     });
     const about = () => dialog.showMessageBox(window, {
       type: 'info', title: 'О приложении', message: 'Протокол разногласий',
-      detail: `Версия ${app.getVersion()}\nДокументы обрабатываются на этом компьютере.`,
+      detail: `Версия ${app.getVersion()}`,
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
       ...(process.platform === 'darwin' ? [{ label: 'Протокол', submenu: [{ label: 'О приложении', click: about }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit', label: 'Завершить' }] }] : []),
@@ -81,13 +81,13 @@ else {
       { label: 'Помощь', submenu: [{ label: 'О приложении', click: about }] },
     ]));
     engine.child.once('exit', () => {
-      if (!engine.stopping && !stopping) dialog.showErrorBox('Движок остановился', 'Сохранённые документы остались на компьютере. Перезапустите приложение.');
+      if (!engine.stopping && !stopping) dialog.showErrorBox('Обработка документов остановилась', 'Перезапустите приложение, чтобы продолжить работу. Сохранённые изменения не потеряны.');
     });
     window.once('ready-to-show', () => window.show());
     window.on('closed', () => { window = null; });
     await window.loadURL(`${APP_ORIGIN}/`);
   }).catch(async () => {
-    if (!stopping) dialog.showErrorBox('Не удалось открыть приложение', 'Не удалось запустить встроенный движок. Проверьте права на папку данных или переустановите приложение. Сохранённые документы не удаляются.');
+    if (!stopping) dialog.showErrorBox('Не удалось открыть приложение', 'Не удалось запустить обработку документов. Перезапустите приложение. Если ошибка повторится, переустановите его. Сохранённые документы не удаляются.');
     await engine?.stop();
     exitReady = true;
     app.quit();

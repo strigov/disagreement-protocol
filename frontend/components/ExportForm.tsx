@@ -59,6 +59,5 @@ export function ExportForm({ documentId, contractName, rowCount, onBusyChange }:
     <Button type="submit" variant="primary" disabled={busy || !cleaned} className="w-full" aria-busy={busy || undefined}>
       {busy ? <Icon name="loader-circle" size={16} className="motion-safe:animate-spin" /> : <Icon name="download" size={16} />}{busy ? "Сохраняем…" : "Сохранить"}
     </Button>
-    <p className="text-center text-xs text-ink-2">Все сохранённые изменения войдут в документ.</p>
   </form>;
 }

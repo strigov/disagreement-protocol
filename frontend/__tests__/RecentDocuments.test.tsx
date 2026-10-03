@@ -30,7 +30,6 @@ test("lists documents from the newest to the oldest with stage, date and a link 
   render(<RecentDocuments />);
 
   expect(screen.getByRole("heading", { level: 2, name: "недавние документы" })).toBeInTheDocument();
-  expect(screen.getByText("Список хранится только в этом браузере.")).toBeInTheDocument();
 
   const rows = screen.getAllByRole("listitem");
   expect(rows).toHaveLength(3);
