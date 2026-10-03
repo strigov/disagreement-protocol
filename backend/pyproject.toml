@@ -23,6 +23,9 @@ dev = [
   "httpx==0.28.1",
   "ruff==0.6.9",
 ]
+desktop = [
+    "pyinstaller==6.22.3",
+]
 
 [build-system]
 requires = ["setuptools>=68"]

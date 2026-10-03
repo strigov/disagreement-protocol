@@ -18,15 +18,15 @@ async def _lifespan(app: FastAPI):
     yield
 
 
-def create_app() -> FastAPI:
+def create_app(*, desktop_token: str | None = None) -> FastAPI:
     app = FastAPI(title="Disagreement Protocol", version="0.1.0", lifespan=_lifespan)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=sorted(ALLOWED_ORIGINS),
+        allow_origins=["disprot://app"] if desktop_token else sorted(ALLOWED_ORIGINS),
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    app.add_middleware(LocalRequestGuard)
+    app.add_middleware(LocalRequestGuard, desktop_token=desktop_token)
 
     @app.get("/health")
     def health() -> dict:

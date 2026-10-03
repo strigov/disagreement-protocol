@@ -3,7 +3,7 @@ import type { Config } from "tailwindcss";
 // Дизайн-система «Бюро» (strigov-crm): источник истины — CSS-переменные в
 // app/globals.css, здесь только их семантические имена для утилит.
 const config: Config = {
-  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}"],
+  content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./desktop/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {

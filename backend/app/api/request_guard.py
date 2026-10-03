@@ -1,6 +1,7 @@
 """Reject oversized or cross-site local requests before FastAPI parses a body."""
 import asyncio
 import os
+import secrets
 from tempfile import SpooledTemporaryFile
 from urllib.parse import urlsplit
 
@@ -18,9 +19,11 @@ ALLOWED_ORIGINS = {f"http://localhost:{UI_PORT}", f"http://127.0.0.1:{UI_PORT}"}
 
 
 class LocalRequestGuard:
-    def __init__(self, app):
+    def __init__(self, app, desktop_token: str | None = None):
         self.app = app
         self.active_uploads = 0
+        self.desktop_token = desktop_token
+        self.allowed_origins = {"disprot://app"} if desktop_token else ALLOWED_ORIGINS
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
@@ -31,6 +34,10 @@ class LocalRequestGuard:
 
         raw_headers = scope.get("headers", [])
         headers = {key.lower(): value for key, value in raw_headers}
+        if self.desktop_token and not secrets.compare_digest(
+            headers.get(b"x-disprot-token", b""), self.desktop_token.encode("ascii"),
+        ):
+            return await reject(403, "Запрос разрешён только из приложения")
         if sum(len(k) + len(v) for k, v in raw_headers) > 16 * 1024:
             return await reject(431, "Слишком большие заголовки запроса")
         hosts = [v for k, v in raw_headers if k.lower() == b"host"]
@@ -41,7 +48,7 @@ class LocalRequestGuard:
         if host not in ALLOWED_HOSTS:
             return await reject(400, "Приложение доступно только по локальному адресу")
         origin = headers.get(b"origin")
-        if origin is not None and origin.decode("latin-1") not in ALLOWED_ORIGINS:
+        if origin is not None and origin.decode("latin-1") not in self.allowed_origins:
             return await reject(403, "Запрос с постороннего сайта запрещён")
         if headers.get(b"sec-fetch-site") == b"cross-site":
             return await reject(403, "Запрос с постороннего сайта запрещён")

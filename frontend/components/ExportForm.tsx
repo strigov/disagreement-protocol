@@ -55,7 +55,7 @@ export function ExportForm({ documentId, contractName, rowCount, onBusyChange }:
     </Field>
     {cleaned && <p className="font-mono text-xs text-ink-2 wrap-anywhere">Файл: {cleaned}.docx</p>}
     {error && <Notice tone="danger" role="alert" id="export-error">{error}</Notice>}
-    {done && !error && <Notice tone="ok" role="status">Скачивание началось. Проверьте загрузки браузера.</Notice>}
+    {done && !error && <Notice tone="ok" role="status">{window.location.protocol === "disprot:" ? "Выберите папку и подтвердите сохранение в открывшемся окне." : "Скачивание началось. Проверьте загрузки браузера."}</Notice>}
     <Button type="submit" variant="primary" disabled={busy || !cleaned} className="w-full" aria-busy={busy || undefined}>
       {busy ? <Icon name="loader-circle" size={16} className="motion-safe:animate-spin" /> : <Icon name="download" size={16} />}{busy ? "Сохраняем…" : "Сохранить"}
     </Button>

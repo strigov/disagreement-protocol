@@ -1,0 +1,74 @@
+name: Build installers (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Какую сборку подготовить (all расходует минуты трёх runners)'
+        required: true
+        default: windows
+        type: choice
+        options: [windows, macos-arm64, macos-x64, all]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-desktop-${{ github.ref }}-${{ inputs.platform }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(inputs.platform == 'all' && '["windows","macos-arm64","macos-x64"]' || format('["{0}"]', inputs.platform)) }}
+    runs-on: ${{ matrix.platform == 'windows' && 'windows-2022' || matrix.platform == 'macos-x64' && 'macos-15-intel' || 'macos-15' }}
+    timeout-minutes: 30
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - run: uv sync --frozen --python 3.12 --extra dev --extra desktop
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm ci
+        working-directory: desktop
+      - run: uv run --frozen python -m pytest -q
+        working-directory: backend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run lint
+        working-directory: frontend
+      - run: npx tsc --noEmit
+        working-directory: frontend
+      - run: npm test
+        working-directory: desktop
+      - run: npm run prepare:app
+        working-directory: desktop
+      - name: Test frozen engine
+        working-directory: backend
+        run: uv run --frozen python ../desktop/scripts/smoke-engine.py ../desktop/build/backend/disprot-engine/disprot-engine${{ matrix.platform == 'windows' && '.exe' || '' }}
+      - name: Package preview installer (no publishing)
+        run: npx electron-builder --publish never
+        working-directory: desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DisagreementProtocol-${{ matrix.platform }}
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*.dmg
+          if-no-files-found: error
+          retention-days: 7
