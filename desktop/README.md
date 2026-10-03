@@ -5,6 +5,7 @@ Electron открывает существующий React-интерфейс, �
 ## Установка
 
 - Windows x64: установщик `DisagreementProtocol-<версия>-win-x64.exe`.
+- Windows x64 без установки: один файл `DisagreementProtocol-<версия>-win-x64-Portable.exe`.
 - Mac с Apple Silicon: `DisagreementProtocol-<версия>-mac-arm64.dmg`.
 - Mac с Intel: `DisagreementProtocol-<версия>-mac-x64.dmg`.
 

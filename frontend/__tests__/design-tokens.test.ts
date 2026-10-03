@@ -20,7 +20,7 @@ const FORBIDDEN_TSX: ReadonlyArray<[string, RegExp]> = [
   ["lucide напрямую (только через Icon)", /from "lucide-react"/],
 ];
 
-const ICON_REGISTRY = "components/icons/Icon.tsx";
+const ICON_REGISTRY = join("components", "icons", "Icon.tsx");
 const ALLOWED_CSS_CLASSES = new Set(["skip-link", "rubric", "wrap-anywhere"]);
 
 const tsxFiles = ["app", "components"].flatMap((dir) =>
