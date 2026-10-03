@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+const uiPort = process.env.DISPROT_UI_PORT || "3000";
+const allowedOrigins = [`http://localhost:${uiPort}`, `http://127.0.0.1:${uiPort}`];
+
 // Loopback binding alone does not prevent requests from an unrelated website.
 export function middleware(request: NextRequest) {
   const host = request.headers.get("host");
@@ -9,7 +12,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.json({ detail: "Приложение доступно только локально" }, { status: 400 });
   }
   const origin = request.headers.get("origin");
-  if ((origin && !["http://localhost:3000", "http://127.0.0.1:3000"].includes(origin)) ||
+  if ((origin && !allowedOrigins.includes(origin)) ||
       request.headers.get("sec-fetch-site") === "cross-site") {
     return NextResponse.json({ detail: "Запрос с постороннего сайта запрещён" }, { status: 403 });
   }

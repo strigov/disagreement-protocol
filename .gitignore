@@ -40,6 +40,10 @@ node_modules/
 .next/
 next-env.d.ts
 *.tsbuildinfo
+build/
+dist/
+.tools/
+.venv-build/
 
 # Local research materials
 docs/brainstorming/Materials/

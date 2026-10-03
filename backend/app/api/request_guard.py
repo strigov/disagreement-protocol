@@ -1,5 +1,6 @@
 """Reject oversized or cross-site local requests before FastAPI parses a body."""
 import asyncio
+import os
 from tempfile import SpooledTemporaryFile
 from urllib.parse import urlsplit
 
@@ -10,7 +11,10 @@ from app.processing.docx_package import MAX_FILE_BYTES
 MAX_REQUEST_BYTES = MAX_FILE_BYTES + 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
 ALLOWED_HOSTS = {"localhost", "127.0.0.1", "::1"}
-ALLOWED_ORIGINS = {"http://localhost:3000", "http://127.0.0.1:3000"}
+UI_PORT = int(os.environ.get("DISPROT_UI_PORT", "3000"))
+if not 1 <= UI_PORT <= 65535:
+    raise ValueError("DISPROT_UI_PORT must be a valid TCP port")
+ALLOWED_ORIGINS = {f"http://localhost:{UI_PORT}", f"http://127.0.0.1:{UI_PORT}"}
 
 
 class LocalRequestGuard:
