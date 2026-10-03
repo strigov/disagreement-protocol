@@ -24,7 +24,7 @@ export function Home({ resumeDocument }: { resumeDocument?: ReactNode }) {
       </div>
       <RecentDocuments />
       <section aria-labelledby="how-it-works-title" className="mt-16 md:mt-20">
-        <h2 id="how-it-works-title" className="font-serif text-xl font-semibold text-ink">как это работает</h2>
+        <h2 id="how-it-works-title" className="font-serif text-xl font-semibold text-ink">Как это работает</h2>
         <ol className="mt-6 grid gap-8 md:grid-cols-3 md:gap-8">
           {STEPS.map((step) => (
             <li key={step.rubric} className="border-t border-line-strong pt-4">

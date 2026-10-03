@@ -34,7 +34,7 @@ List 3–7 externally observable criteria that define "done" for the whole plan.
 - Все экраны (`/`, `/documents/{id}/analysis`, `/documents/{id}/parties`, `/documents/{id}/protocol` в режимах «По пунктам» и «Таблица», диалог экспорта и `/documents/{id}/export`) оформлены токенами и иерархией «Бюро»: заголовки страниц — Cormorant Garamond, интерфейс — Inter Tight, рубрики/номера/даты — JetBrains Mono uppercase-рубриками; шрифты отдаются как `/fonts/*.woff2` с того же origin, внешних запросов нет, `frontend/public/fonts/OFL.txt` содержит copyright всех трёх семейств и полный текст SIL OFL 1.1.
 - В шапке есть переключатель темы («Светлая тема» / «Тёмная тема» / «Как в системе»); выбор хранится в `localStorage['disprot.theme']`, применяется до первой отрисовки (перезагрузка в тёмной теме не мигает светлой), обе темы корректны на всех экранах; на `<html>` всегда стоят `data-concept="buro"` и `data-theme="light|dark"`.
 - `frontend/__tests__/design-tokens.test.ts` проходит без allowlist: в `app/**/*.tsx` и `components/**/*.tsx` нет палитровых классов Tailwind (`slate-*`, `blue-*`, …, `white`/`black`), произвольных `[…]`-значений и вариантов, hex-цветов, модификатора `dark:`, градиентов/blur, радиусов больше 12px и трёх точек после кириллицы; в `app/globals.css` цвета встречаются только внутри двух блоков токенов, а собственные классы — только `skip-link`, `rubric`, `wrap-anywhere`.
-- Главная показывает «недавние документы», открытые в этом браузере (название, этап, дата), переход идёт через `/documents/{id}/analysis` и попадает на нужный этап без перестроения протокола; на экране сторон при неактивной «Построить протокол» перечислены все невыполненные условия.
+- Главная показывает «Недавние документы», открытые в этом браузере (название, этап, дата), переход идёт через `/documents/{id}/analysis` и попадает на нужный этап без перестроения протокола; на экране сторон при неактивной «Построить протокол» перечислены все невыполненные условия.
 - В протоколе: меню действий строки закрывается по Esc (фокус возвращается на кнопку меню), по клику вне и после выбора, в режиме «Таблица» не обрезается контейнером; «Исключить из протокола» выполняется только после подтверждения в диалоге; фильтр показывает счётчики «Все пункты / Требуют внимания / Не проверены мной»; «Проверено — дальше» ставит отметку с прежним fingerprint в `localStorage['protocol-review:<protocolId>']` и открывает следующий пункт.
 - Загрузка данных сторон и протокола показывает Skeleton и текст статуса; ошибки загрузки анализа, сторон и протокола показывают текст и кнопку «Повторить», которая повторяет запрос (протокол при повторе снова начинается со списка, существующий протокол не перестраивается).
 - Все существующие тесты проходят (изменены только места, перечисленные в фазах), добавлены тесты новых сценариев; `npm run lint`, `npx tsc --noEmit`, `npm test`, `npm run build` проходят; `frontend/package.json`, `frontend/package-lock.json`, `frontend/middleware.ts` и `backend/` не изменены; порядок API-вызовов, save/flush-гейтинг, `beforeunload`, двухпроходный PATCH сторон и a11y-механика (skip link, landmarks, aria-live, клавиатурное редактирование ячеек, reduced motion) сохранены.
@@ -68,7 +68,7 @@ List the spec's project-wide requirements — version floors, dependency limits,
 - Три гарнитуры и их роли: Cormorant Garamond (`font-serif`) — заголовки страниц, редакторские секционные заголовки, названия договоров/пунктов; Inter Tight (`font-sans`) — весь UI, заголовки диалогов; JetBrains Mono (`font-mono`) — номера, даты, uppercase-рубрики. Четвёртое семейство запрещено.
 - Скругления `rounded-xs/sm/md/lg/pill` = 4/6/8/12/999px; тени только `shadow-sm` и `shadow-md`; без градиентов, glassmorphism, blur-фонов; радиус больше 12px на карточках и кнопках запрещён.
 - Иконки только через `<Icon />` (собственные глифы `Ico` + fallback на lucide-react); размер по умолчанию 14px, stroke 1.4; другие icon-библиотеки и декоративные SVG запрещены.
-- Russian copy, no emojis, "…" character not three dots, мы-форма for in-progress buttons ("Сохраняем…"); заголовки разделов — серифом строчными, без двоеточия; метки рубрик — моно uppercase.
+- Russian copy, no emojis, "…" character not three dots, мы-форма for in-progress buttons ("Сохраняем…"); заголовки разделов — серифом с заглавной буквы, без двоеточия; метки рубрик — моно uppercase.
 - Preserve all existing behaviour and data-safety logic: API calls and their order, the save/flush gating in `ProtocolTable` (`saveAll`, pending/draft refs, blocking structural ops and navigation until saves finish), `beforeunload` guard, reviewed-marks fingerprinting in localStorage `protocol-review:<protocolId>`, the exhaustive status handling on the analysis page, API error message handling in `lib/api.ts`, the two-pass parties PATCH, not rebuilding an existing protocol.
 - Accessibility must not regress: skip link, landmarks, labels, roles, `aria-live` status, focus-visible styling, keyboard operation of editable cells (Enter/Space/F2 to edit, Esc cancel, Ctrl/⌘+Enter save), `prefers-reduced-motion`.
 - Existing tests must keep passing; update a test only where copy/markup intentionally changes, and add tests for new UX behaviour.
@@ -109,7 +109,7 @@ List the spec's project-wide requirements — version floors, dependency limits,
 
 - Create `frontend/lib/format.ts` — `fmtDateTime` по правилам «Бюро».
 - Create `frontend/lib/recent-documents.ts` — список недавних документов в `localStorage`.
-- Create `frontend/components/RecentDocuments.tsx` — секция «недавние документы» на главной.
+- Create `frontend/components/RecentDocuments.tsx` — секция «Недавние документы» на главной.
 - Modify `frontend/app/page.tsx` — главная на `PageHeader`, загрузка, недавние документы, шаги.
 - Modify `frontend/components/FileUpload.tsx` — оформление, запись в недавние после загрузки.
 - Modify `frontend/app/documents/[id]/analysis/page.tsx` — оформление, повтор при ошибке, запись в недавние.
@@ -490,7 +490,7 @@ export function RecentDocuments(): JSX.Element | null;
 ```
 
 - Читает список в `useEffect` (SSR и первый client render — `null`); при пустом списке — `null` (пустое состояние всей главной — зона загрузки).
-- `<section aria-labelledby>`: `h2` «недавние документы» (`font-serif text-xl font-semibold`, строчными), пояснение «Список хранится только в этом браузере.»; `<ul>` строк с `border-b border-dashed border-line-c last:border-b-0`.
+- `<section aria-labelledby>`: `h2` «Недавние документы» (`font-serif text-xl font-semibold`, с заглавной буквы), пояснение «Список хранится только в этом браузере.»; `<ul>` строк с `border-b border-dashed border-line-c last:border-b-0`.
 - Строка: `<Link href={`/documents/${id}/analysis`}>` (`hover:bg-bg-hover`) с названием (`font-serif`, `title ?? "Документ без названия"`), рубрикой этапа (`analysis` → «Обработка», `parties` → «Стороны», `protocol` → «Протокол») и датой `fmtDateTime(openedAt)` (`font-mono text-xs text-ink-2`); рядом, вне ссылки, `IconButton icon="x" label={`Убрать «${title}» из списка`}` → `forgetDocument` + обновление состояния.
 
 ### C9. Протокольные компоненты (Ф3)
@@ -844,7 +844,7 @@ git diff -- tsconfig.json   # если next build переписал файл �
 
 - [ ] **Step 2: Главная**
 
-  `RecentDocuments.test.tsx`, затем `components/RecentDocuments.tsx` по C8. `app/page.tsx` остаётся серверным компонентом: `PageHeader` (рубрика «От правок — к готовому документу», заголовок «Протокол разногласий. Каждая правка на своём месте.», прежнее описание), `FileUpload`, `RecentDocuments`, секция `h2` «как это работает» (serif, строчными) с тремя шагами: рубрики «01 / Документ», «02 / Стороны», «03 / Протокол», сетка `md:grid-cols-3`, ниже `md` — столбец.
+  `RecentDocuments.test.tsx`, затем `components/RecentDocuments.tsx` по C8. `app/page.tsx` остаётся серверным компонентом: `PageHeader` (рубрика «От правок — к готовому документу», заголовок «Протокол разногласий. Каждая правка на своём месте.», прежнее описание), `FileUpload`, `RecentDocuments`, секция `h2` «Как это работает» (serif, с заглавной буквы) с тремя шагами: рубрики «01 / Документ», «02 / Стороны», «03 / Протокол», сетка `md:grid-cols-3`, ниже `md` — столбец.
 
 - [ ] **Step 3: Загрузка файла**
 

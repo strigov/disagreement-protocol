@@ -226,7 +226,7 @@ export default function ProtocolPage() {
         title="Протокол разногласий"
         meta={<>
           {analysis?.contract_name && <span className="flex min-w-0 items-center gap-1.5 text-ink-1"><Icon name="file-text" className="text-ink-2" /><span className="wrap-anywhere">{analysis.contract_name}</span></span>}
-          <span className="flex items-center gap-1.5"><span className="rubric">Наша сторона</span><strong className="font-medium text-ink">{draftingParty?.name || draftingParty?.role || "определяем…"}</strong></span>
+          <span className="flex items-center gap-1.5"><span className="rubric">Наша сторона</span><strong className="font-medium text-ink">{draftingParty?.name || draftingParty?.role || "Определяем…"}</strong></span>
           <span className="flex items-center gap-1.5 text-ink-1" aria-live="polite"><Icon name={save.icon} className={save.className} />{save.label}</span>
         </>}
         actions={
