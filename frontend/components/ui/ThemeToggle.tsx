@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { Icon, type IconName } from "@/components/icons/Icon";

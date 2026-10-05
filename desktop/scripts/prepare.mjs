@@ -19,7 +19,7 @@ function run(command, args, cwd) {
 const build = path.join(desktop, 'build');
 await mkdir(build, { recursive: true });
 await createIcons(build);
-run(process.execPath, [npmCLI, 'run', 'build:desktop'], path.join(root, 'frontend'));
+run(process.execPath, [npmCLI, 'run', 'build'], path.join(root, 'frontend'));
 run('uv', [
   'run', '--frozen', '--python', '3.12', '--extra', 'desktop', '--extra', 'dev', 'python', '-m', 'PyInstaller',
   '--noconfirm', '--clean', '--onedir', '--name', 'disprot-engine',

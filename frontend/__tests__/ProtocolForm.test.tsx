@@ -1,13 +1,15 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render } from "./render";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import ProtocolPage from "@/app/documents/[id]/protocol/page";
+import ProtocolPage from "@/pages/ProtocolPage";
 import { server } from "@/src/mocks/server";
 import type { ProtocolForm, ProtocolFormPatch } from "@/lib/types";
 import { FORM } from "./fixtures/protocol-form";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), useParams: () => ({ id: "doc1" }) }));
+vi.mock("@/lib/navigation", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/navigation")>(), useRouter: () => ({ push }), useParams: () => ({ id: "doc1" }) }));
 const row = { id: "r1", sort_order: 0, point_label: "1.1", party_1_text: "Было", party_2_text: "Стало", agreed_text: "Согласовано", source_clause_key: null, confidence: 1, flags: [], user_edited: false };
 let saved: ProtocolForm;
 let patches: ProtocolFormPatch[];

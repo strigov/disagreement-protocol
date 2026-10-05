@@ -1,13 +1,15 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { render } from "./render";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import ProtocolPage from "@/app/documents/[id]/protocol/page";
+import ProtocolPage from "@/pages/ProtocolPage";
 import ProtocolTable from "@/components/ProtocolTable";
 import { api } from "@/lib/api";
 import { FORM } from "./fixtures/protocol-form";
 import type { ProtocolRow } from "@/lib/types";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), useParams: () => ({ id: "doc1" }) }));
+vi.mock("@/lib/navigation", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/navigation")>(), useRouter: () => ({ push }), useParams: () => ({ id: "doc1" }) }));
 vi.mock("@/lib/api", () => ({ api: {
   listProtocolsForDocument: vi.fn(), getProtocolRows: vi.fn(), getAnalysis: vi.fn(),
   patchRow: vi.fn(), addRow: vi.fn(), deleteRow: vi.fn(), swapParties: vi.fn(), buildProtocol: vi.fn(),

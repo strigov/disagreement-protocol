@@ -1,5 +1,3 @@
-"use client";
-
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";

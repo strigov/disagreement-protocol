@@ -9,8 +9,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "."),
-      "next/navigation": path.resolve(__dirname, "desktop/navigation.tsx"),
-      "next/link": path.resolve(__dirname, "desktop/navigation.tsx"),
     },
   },
   css: { postcss: path.resolve(__dirname, ".") },

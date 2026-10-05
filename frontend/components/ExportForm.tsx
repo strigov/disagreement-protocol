@@ -1,5 +1,3 @@
-"use client";
-
 import { useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { Icon } from "@/components/icons/Icon";
@@ -8,6 +6,7 @@ import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
 import { Notice } from "@/components/ui/Notice";
 
+// eslint-disable-next-line no-control-regex -- File names must not contain control characters.
 const sanitize = (raw: string) => raw.trim().replace(/\.docx$/i, "").replace(/[\\/]/g, "").replace(/[\x00-\x1f\x7f]/g, "").slice(0, 200).trim();
 
 export function ExportForm({ documentId, contractName, rowCount, onBusyChange }: {
@@ -36,7 +35,7 @@ export function ExportForm({ documentId, contractName, rowCount, onBusyChange }:
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      // Give the browser a chance to start consuming the download URL.
+      // Let Electron start consuming the download before releasing the blob.
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setDone(true);
     } catch (e) { setError((e as Error).message); }
@@ -55,7 +54,7 @@ export function ExportForm({ documentId, contractName, rowCount, onBusyChange }:
     </Field>
     {cleaned && <p className="font-mono text-xs text-ink-2 wrap-anywhere">Файл: {cleaned}.docx</p>}
     {error && <Notice tone="danger" role="alert" id="export-error">{error}</Notice>}
-    {done && !error && <Notice tone="ok" role="status">{window.location.protocol === "disprot:" ? "Выберите папку и подтвердите сохранение в открывшемся окне." : "Скачивание началось. Проверьте загрузки браузера."}</Notice>}
+    {done && !error && <Notice tone="ok" role="status">Выберите папку и подтвердите сохранение в открывшемся окне.</Notice>}
     <Button type="submit" variant="primary" disabled={busy || !cleaned} className="w-full" aria-busy={busy || undefined}>
       {busy ? <Icon name="loader-circle" size={16} className="motion-safe:animate-spin" /> : <Icon name="download" size={16} />}{busy ? "Сохраняем…" : "Сохранить"}
     </Button>

@@ -1,5 +1,3 @@
-"use client";
-
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Party, ProtocolForm, ProtocolFormPatch, ProtocolRow, ProtocolSignature } from "@/lib/types";
 import type { SaveState } from "@/components/ProtocolTable";

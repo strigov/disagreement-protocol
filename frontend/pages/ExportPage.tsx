@@ -1,7 +1,5 @@
-"use client";
-
-import Link from "next/link";
-import { useParams } from "next/navigation";
+import Link from "@/lib/navigation";
+import { useParams } from "@/lib/navigation";
 import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { ExportForm } from "@/components/ExportForm";
 import { Icon } from "@/components/icons/Icon";

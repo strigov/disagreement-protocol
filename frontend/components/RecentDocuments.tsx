@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import Link from "@/lib/navigation";
 import { useEffect, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { fmtDateTime } from "@/lib/format";
@@ -14,7 +12,7 @@ const STAGE_LABEL: Record<RecentStage, string> = {
 
 const UNTITLED = "Документ без названия";
 
-// Список живёт в localStorage этого браузера: backend не отдаёт список документов.
+// Список живёт в localStorage этого профиля приложения: backend не отдаёт список документов.
 // До монтирования (SSR и первый render клиента) хранилище недоступно — рендерим ничего,
 // чтобы разметка совпала при гидрации.
 export function RecentDocuments() {

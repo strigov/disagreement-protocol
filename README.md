@@ -78,9 +78,8 @@
 | :--- | :--- |
 | macOS | `~/Library/Application Support/DisagreementProtocol/data` |
 | Windows | `%APPDATA%\DisagreementProtocol\data` |
-| Запуск из исходников | `backend/data/` |
 
-Для полной резервной копии закройте приложение и сохраните весь каталог `DisagreementProtocol`: личные отметки проверки хранятся в профиле Electron рядом с папкой `data`. Данные из режима разработки автоматически в настольное приложение не переносятся.
+Для полной резервной копии закройте приложение и сохраните весь каталог `DisagreementProtocol`: личные отметки проверки хранятся в профиле Electron рядом с папкой `data`. Запуск Electron из исходников использует тот же профиль приложения. Для отдельного тестового профиля задайте `DISPROT_USER_DATA`.
 
 ## Поддерживаемые документы
 
@@ -93,25 +92,28 @@
 
 ## Быстрый старт из исходников
 
-Нужны **Python 3.12**, **uv**, **Node.js 22.19+** и **npm**. Команды ниже предназначены для терминала Bash на macOS / Linux.
+Нужны **Windows x64 или macOS**, **uv**, **Node.js 22.19+** и **npm**. Python 3.12 устанавливается через uv. Сборка выполняется на той ОС и архитектуре, где будет работать приложение.
 
 ```bash
 git clone https://github.com/strigov/disagreement-protocol.git
 cd disagreement-protocol
-./scripts/install.sh
-./scripts/start.sh
+npm ci --prefix frontend
+npm ci --prefix desktop
+uv sync --project backend --frozen --python 3.12 --extra dev --extra desktop
+npm --prefix desktop run prepare:app
+npm --prefix desktop start
 ```
 
-Откройте **[localhost:3000](http://localhost:3000)**. Для остановки нажмите **Ctrl + C**. Backend работает на `127.0.0.1:8000`, frontend — на `127.0.0.1:3000`; данные сохраняются в `backend/data/`.
+Откроется окно **«Протокол разногласий»**. Встроенный движок запускается и завершается вместе с приложением. После изменения интерфейса или движка повторите `prepare:app` перед запуском.
 
-Ручной запуск и настройки описаны в [руководстве](docs/guide.md#вручную). Сборка установщика из исходников — в [desktop/README.md](desktop/README.md#локальная-сборка).
+Чтобы получить установщик, выполните `npm --prefix desktop run dist`. Результат появится в `desktop/dist/`. Подробнее — в [руководстве настольной сборки](desktop/README.md#локальная-сборка).
 
 ## Разработка
 
 | Каталог | Назначение |
 | :--- | :--- |
 | [`backend/`](backend/) | Python · FastAPI · SQLite. Разбор OOXML, формирование протокола, экспорт DOCX. |
-| [`frontend/`](frontend/) | TypeScript · React. Next.js для запуска в браузере, Vite для настольной сборки. |
+| [`frontend/`](frontend/) | TypeScript · React · Vite. Статический интерфейс настольного приложения. |
 | [`desktop/`](desktop/) | Electron · PyInstaller. Окно приложения, встроенный движок и установщики. |
 | [`samples/`](samples/) | Тестовые договоры и примеры пограничных случаев. |
 | [`docs/`](docs/) | Руководства, планы и отчёты проверок. |
@@ -149,9 +151,9 @@ npm test
 
 В настольной версии Electron обслуживает статический React-интерфейс на `disprot://app` и передаёт API-запросы встроенному Python-движку на случайном локальном порту. Движок завершается при закрытии приложения. Токен доступа добавляет главный процесс Electron; renderer его не получает.
 
-В режиме разработки Next.js проксирует `/api/*` в FastAPI. Разбор выполняется фоновой задачей в том же процессе. Docker, PostgreSQL, Redis и S3 не требуются; приложение предназначено для локальной работы.
+Разбор выполняется фоновой задачей в процессе встроенного движка. Docker, PostgreSQL, Redis и S3 не требуются.
 
-Цвета и размеры интерфейса задаются семантическими токенами в [`globals.css`](frontend/app/globals.css) и [`tailwind.config.ts`](frontend/tailwind.config.ts). Общие элементы находятся в [`components/ui/`](frontend/components/ui/). Локальные шрифты Cormorant Garamond, Inter Tight и JetBrains Mono поставляются под [SIL Open Font License 1.1](frontend/public/fonts/OFL.txt).
+Цвета и размеры интерфейса задаются семантическими токенами в [`globals.css`](frontend/styles/globals.css) и [`tailwind.config.ts`](frontend/tailwind.config.ts). Общие элементы находятся в [`components/ui/`](frontend/components/ui/). Локальные шрифты Cormorant Garamond, Inter Tight и JetBrains Mono поставляются под [SIL Open Font License 1.1](frontend/public/fonts/OFL.txt).
 
 </details>
 

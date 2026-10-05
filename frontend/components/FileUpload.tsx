@@ -1,7 +1,5 @@
-"use client";
-
 import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter } from "@/lib/navigation";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { rememberDocument } from "@/lib/recent-documents";

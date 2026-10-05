@@ -153,7 +153,8 @@ async def test_nonlocal_host_and_invalid_content_type_are_rejected():
         assert (await client.get("/health")).status_code == 400
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost") as client:
         assert (await client.post("/api/documents", data={"x": "y"})).status_code == 415
-        assert (await client.get("/health", headers={"Origin": "http://localhost:3000"})).status_code == 200
+        assert (await client.get("/health", headers={"Origin": "disprot://app"})).status_code == 200
+        assert (await client.get("/health", headers={"Origin": "http://localhost:3000"})).status_code == 403
 
 
 @pytest.mark.asyncio

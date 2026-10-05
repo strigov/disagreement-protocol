@@ -1,5 +1,3 @@
-"use client";
-
 import { Icon } from "@/components/icons/Icon";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";

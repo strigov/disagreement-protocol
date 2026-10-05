@@ -38,13 +38,9 @@ temp/
 coverage/
 htmlcov/
 node_modules/
-.next/
-next-env.d.ts
 *.tsbuildinfo
 build/
 dist/
-.tools/
-.venv-build/
 
 # Desktop build output (never package local documents or the developer database)
 desktop/build/
@@ -53,3 +49,9 @@ desktop/dist/
 # Local research materials
 docs/brainstorming/Materials/
 docs/plans/*.ledger.json
+
+# Generated artifacts left by the removed browser build
+.next/
+next-env.d.ts
+.tools/
+.venv-build/

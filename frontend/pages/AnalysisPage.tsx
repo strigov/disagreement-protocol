@@ -1,7 +1,6 @@
-"use client";
-import Link from "next/link";
+import Link from "@/lib/navigation";
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "@/lib/navigation";
 import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { Icon } from "@/components/icons/Icon";
 import { Button, buttonClassName } from "@/components/ui/Button";

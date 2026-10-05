@@ -23,7 +23,7 @@ const FORBIDDEN_TSX: ReadonlyArray<[string, RegExp]> = [
 const ICON_REGISTRY = join("components", "icons", "Icon.tsx");
 const ALLOWED_CSS_CLASSES = new Set(["skip-link", "rubric", "wrap-anywhere"]);
 
-const tsxFiles = ["app", "components"].flatMap((dir) =>
+const tsxFiles = ["pages", "components", "desktop"].flatMap((dir) =>
   (readdirSync(join(ROOT, dir), { recursive: true }) as string[])
     .filter((file) => file.endsWith(".tsx"))
     .map((file) => relative(ROOT, join(ROOT, dir, file))),
@@ -39,7 +39,7 @@ test.each(tsxFiles)("%s uses only design-system tokens", (file) => {
 });
 
 test("globals.css keeps colours inside the two theme blocks and defines only shared classes", () => {
-  const css = readFileSync(join(ROOT, "app/globals.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const css = readFileSync(join(ROOT, "styles/globals.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const outsideThemes = css.replace(/\[data-concept='buro'\]\[data-theme='(?:light|dark)'\]\s*\{[^}]*\}/g, "");
   expect(outsideThemes).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/);
   expect(css).not.toMatch(/@import|https?:/);

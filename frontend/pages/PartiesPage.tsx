@@ -1,6 +1,5 @@
-"use client";
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "@/lib/navigation";
 import { WorkspaceShell } from "@/components/WorkspaceShell";
 import { AnalysisSummary } from "@/components/AnalysisSummary";
 import { Icon } from "@/components/icons/Icon";

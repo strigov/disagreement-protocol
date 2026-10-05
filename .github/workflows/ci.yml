@@ -30,7 +30,7 @@ jobs:
         run: uv run --frozen python -m pytest -q
 
   frontend:
-    name: Frontend tests and build
+    name: Desktop UI tests and build
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -49,5 +49,24 @@ jobs:
         run: npm test
       - name: Lint
         run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit
       - name: Build
         run: npm run build
+
+  desktop:
+    name: Electron tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm test

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
-import { readThemeMode, resolveTheme, THEME_INIT_SCRIPT, THEME_STORAGE_KEY } from "@/lib/theme";
+import { readThemeMode, resolveTheme, initTheme, THEME_STORAGE_KEY } from "@/lib/theme";
 
 type Listener = (event: MediaQueryListEvent) => void;
 
@@ -46,17 +46,17 @@ test.each([
   ["light", true, "light"],
   [null, true, "dark"],
   [null, false, "light"],
-] as const)("init script applies stored %s (system dark: %s) before paint", (stored, systemDark, expected) => {
+] as const)("theme initialization applies stored %s (system dark: %s) before paint", (stored, systemDark, expected) => {
   if (stored) window.localStorage.setItem(THEME_STORAGE_KEY, stored);
   stubMatchMedia(systemDark);
-  new Function(THEME_INIT_SCRIPT)();
+  initTheme();
   expect(html).toHaveAttribute("data-theme", expected);
   expect(html).toHaveAttribute("data-concept", "buro");
 });
 
-test("init script never throws, even without matchMedia or storage", () => {
+test("theme initialization never throws, even without matchMedia or storage", () => {
   const spy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("denied"); });
-  expect(() => new Function(THEME_INIT_SCRIPT)()).not.toThrow();
+  expect(() => initTheme()).not.toThrow();
   expect(html).toHaveAttribute("data-theme", "light");
   spy.mockRestore();
 });

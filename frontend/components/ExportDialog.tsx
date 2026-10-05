@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { ExportForm } from "./ExportForm";

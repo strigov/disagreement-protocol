@@ -1,4 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
+import { render } from "./render";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RecentDocuments } from "@/components/RecentDocuments";
 import { fmtDateTime } from "@/lib/format";

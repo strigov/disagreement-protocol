@@ -1,5 +1,5 @@
-// Тема «Бюро»: data-theme на <html> выставляет inline-скрипт до первой
-// отрисовки, дальше им управляет ThemeToggle. Модуль не трогает window при импорте.
+// Тема «Бюро»: initTheme вызывается перед первой отрисовкой интерфейса,
+// дальше темой управляет ThemeToggle. Модуль не трогает window при импорте.
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
@@ -39,15 +39,6 @@ export function applyTheme(theme: ResolvedTheme): void {
   document.documentElement.setAttribute("data-concept", "buro");
 }
 
-// Статическая строка без пользовательских данных; никогда не бросает исключение.
-export const THEME_INIT_SCRIPT = `(function () {
-  var theme = "light";
-  try {
-    var mode = window.localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});
-    var dark = mode === "dark" || (mode !== "light" && typeof window.matchMedia === "function"
-      && window.matchMedia("(prefers-color-scheme: dark)").matches);
-    theme = dark ? "dark" : "light";
-  } catch (e) {}
-  document.documentElement.setAttribute("data-theme", theme);
-  document.documentElement.setAttribute("data-concept", "buro");
-})();`;
+export function initTheme(): void {
+  applyTheme(resolveTheme(readThemeMode(), systemPrefersDark()));
+}

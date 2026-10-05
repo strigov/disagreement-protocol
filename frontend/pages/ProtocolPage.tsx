@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter } from "@/lib/navigation";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { rememberDocument } from "@/lib/recent-documents";

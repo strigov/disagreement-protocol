@@ -1,6 +1,4 @@
-"use client";
-
-import Link from "next/link";
+import Link from "@/lib/navigation";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons/Icon";

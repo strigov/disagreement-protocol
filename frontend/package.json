@@ -3,10 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 -p 3000",
-    "build": "next build",
-    "build:desktop": "vite build --config vite.desktop.config.ts",
-    "start": "next start --hostname 127.0.0.1 -p 3000",
+    "build": "vite build",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run"
   },
@@ -15,7 +12,6 @@
     "autoprefixer": "10.5.4",
     "diff": "9.0.0",
     "lucide-react": "1.48.0",
-    "next": "15.5.24",
     "postcss": "8.5.26",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -23,7 +19,6 @@
     "tailwindcss": "3.4.19"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.6",
     "@testing-library/jest-dom": "6.5.0",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.5.2",
@@ -32,12 +27,18 @@
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "5.2.0",
     "eslint": "9.39.5",
-    "eslint-config-next": "15.5.24",
     "jsdom": "25.0.0",
     "msw": "^2.0.0",
     "typescript": "5.9.3",
     "vite": "7.3.6",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "@eslint/js": "9.39.5",
+    "@typescript-eslint/parser": "8.68.0",
+    "@typescript-eslint/eslint-plugin": "8.68.0",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "globals": "14.0.0",
+    "eslint-plugin-jsx-a11y": "6.10.2"
   },
   "engines": {
     "node": ">=22.19.0"

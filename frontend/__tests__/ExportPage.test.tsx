@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render } from "./render";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import ExportPage from "@/app/documents/[id]/export/page";
+import ExportPage from "@/pages/ExportPage";
 import { server } from "@/src/mocks/server";
 
-vi.mock("next/navigation", () => ({
+vi.mock("@/lib/navigation", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/navigation")>(),
   useRouter: () => ({ push: vi.fn() }),
   useParams: () => ({ id: "doc1" }),
 }));
@@ -64,7 +66,7 @@ test("submits sanitized filename and triggers DOCX download", async () => {
   await userEvent.type(input, "report/v1");
   await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
 
-  await screen.findByText("Скачивание началось. Проверьте загрузки браузера.");
+  await screen.findByText("Выберите папку и подтвердите сохранение в открывшемся окне.");
 
   expect(received).toEqual({ filename: "reportv1" });
   expect(
@@ -123,5 +125,5 @@ test("shows busy state while export is in flight", async () => {
   expect(screen.getByLabelText(/Имя файла/)).toBeDisabled();
 
   release();
-  await screen.findByText("Скачивание началось. Проверьте загрузки браузера.");
+  await screen.findByText("Выберите папку и подтвердите сохранение в открывшемся окне.");
 });

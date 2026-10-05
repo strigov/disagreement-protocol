@@ -1,7 +1,7 @@
 import { useMemo, type ComponentProps } from "react";
 import { Link as RouterLink, useNavigate, useParams as useRouteParams } from "react-router-dom";
 
-// The desktop build reuses the same pages; only Next's navigation is replaced.
+// Navigation within the persistent Electron app origin.
 export function useRouter() {
   const navigate = useNavigate();
   return useMemo(() => ({

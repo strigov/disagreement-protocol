@@ -1,14 +1,16 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render } from "./render";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import ProtocolPage from "@/app/documents/[id]/protocol/page";
+import ProtocolPage from "@/pages/ProtocolPage";
 import ProtocolTable from "@/components/ProtocolTable";
 import { server } from "@/src/mocks/server";
 import { readRecentDocuments } from "@/lib/recent-documents";
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }));
 
-vi.mock("next/navigation", () => ({
+vi.mock("@/lib/navigation", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/navigation")>(),
   useRouter: () => ({ push }),
   useParams: () => ({ id: "doc1" }),
 }));
