@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" fill="none">
+  <title>Протокол разногласий</title>
+  <desc>Обложка в стиле Бюро: тёплая бумага, янтарный акцент и схема таблицы с редакциями договора.</desc>
+  <rect width="1280" height="400" rx="16" fill="#FAF6EE"/>
+  <rect x="1" y="1" width="1278" height="398" rx="15" stroke="#E5DCCB"/>
+  <path d="M56 62H92" stroke="#A86A1F" stroke-width="3"/>
+  <text x="108" y="68" font-family="Arial, sans-serif" font-size="13" letter-spacing="3" fill="#7A6E5E">БЮРО / ИНСТРУМЕНТЫ ДЛЯ ДОГОВОРОВ</text>
+  <text x="56" y="158" font-family="Georgia, 'Times New Roman', serif" font-size="60" fill="#28201A">Протокол</text>
+  <text x="56" y="222" font-family="Georgia, 'Times New Roman', serif" font-size="60" fill="#28201A">разногласий</text>
+  <text x="59" y="271" font-family="Arial, sans-serif" font-size="18" fill="#7A6E5E">От правок в договоре к документу для согласования.</text>
+  <rect x="56" y="313" width="126" height="30" rx="15" fill="#F3E3CB"/>
+  <text x="119" y="333" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#87541A">WORD → DOCX</text>
+  <text x="201" y="333" font-family="Arial, sans-serif" font-size="12" letter-spacing="1.5" fill="#7A6E5E">ЛОКАЛЬНО · WINDOWS · MACOS</text>
+  <rect x="794" y="47" width="418" height="314" rx="8" fill="#EDE5D6"/>
+  <rect x="780" y="35" width="418" height="314" rx="8" fill="#FFFFFF" stroke="#DFD5C3"/>
+  <text x="806" y="69" font-family="Arial, sans-serif" font-size="11" letter-spacing="2" fill="#A86A1F">ПРОТОКОЛ РАЗНОГЛАСИЙ</text>
+  <path d="M806 88H1172" stroke="#E5DCCB"/>
+  <rect x="806" y="105" width="366" height="32" fill="#F1ECDF"/>
+  <rect x="806" y="105" width="366" height="172" stroke="#DFD5C3"/>
+  <path d="M844 105V277M949 105V277M1061 105V277M806 137H1172M806 207H1172" stroke="#DFD5C3"/>
+  <g font-family="Arial, sans-serif" font-size="9" fill="#7A6E5E">
+    <text x="815" y="125">№</text>
+    <text x="854" y="125">Исходная</text>
+    <text x="959" y="125">Предлагаемая</text>
+    <text x="1071" y="125">Согласованная</text>
+  </g>
+  <g font-family="monospace" font-size="11" fill="#7A6E5E">
+    <text x="815" y="164">1.1</text>
+    <text x="815" y="235">2.3</text>
+  </g>
+  <g stroke="#D6CFC2" stroke-width="4" stroke-linecap="round">
+    <path d="M856 151H933M856 164H916M856 190H926M961 151H1034M961 177H1022M961 190H1046M1073 151H1155M1073 177H1141M1073 190H1151"/>
+    <path d="M856 222H933M856 248H916M856 261H926M961 222H1042M961 248H1030M961 261H1046M1073 222H1155M1073 248H1141M1073 261H1151"/>
+  </g>
+  <rect x="852" y="171" width="78" height="12" rx="2" fill="#F3DCCF"/>
+  <path d="M856 177H926" stroke="#9A3A25" stroke-width="2"/>
+  <rect x="957" y="158" width="82" height="12" rx="2" fill="#DFE8D4"/>
+  <path d="M961 164H1035" stroke="#466A3D" stroke-width="2"/>
+  <rect x="1069" y="158" width="82" height="12" rx="2" fill="#DFE8D4"/>
+  <path d="M1073 164H1147" stroke="#466A3D" stroke-width="2"/>
+  <rect x="852" y="229" width="70" height="12" rx="2" fill="#F3DCCF"/>
+  <path d="M856 235H918" stroke="#9A3A25" stroke-width="2"/>
+  <rect x="957" y="229" width="89" height="12" rx="2" fill="#DFE8D4"/>
+  <path d="M961 235H1042" stroke="#466A3D" stroke-width="2"/>
+  <rect x="1069" y="229" width="89" height="12" rx="2" fill="#DFE8D4"/>
+  <path d="M1073 235H1154" stroke="#466A3D" stroke-width="2"/>
+  <path d="M806 317H928M1050 317H1172" stroke="#D6CFC2"/>
+  <text x="806" y="306" font-family="Arial, sans-serif" font-size="9" fill="#A89C89">Сторона 1</text>
+  <text x="1050" y="306" font-family="Arial, sans-serif" font-size="9" fill="#A89C89">Сторона 2</text>
+</svg>
