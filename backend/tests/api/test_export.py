@@ -179,3 +179,48 @@ def test_export_endpoint_returns_docx_bytes(ready_doc):
     assert response.content[:2] == b"PK"
     assert doc.status == DocumentStatus.EXPORTED
     assert db.committed is True
+
+
+def test_export_applies_settings_to_current_row_text(ready_doc):
+    from io import BytesIO
+    from docx import Document as WordDocument
+
+    doc, db = ready_doc
+    with TestClient(app, base_url="http://localhost") as client:
+        client.post(f"/api/documents/{doc.id}/protocol")
+        db.rows[0].party_2_text = "Ручная правка"
+        response = client.post(f"/api/documents/{doc.id}/protocol/export", json={
+            "filename": "Выделенный", "highlighting": {"enabled": True, "additions": {"color": None, "bold": True}},
+        })
+        clean_response = client.post(f"/api/documents/{doc.id}/protocol/export", json={"filename": "Чистый"})
+    assert response.status_code == clean_response.status_code == 200
+    marked = WordDocument(BytesIO(response.content)).tables[0].rows[1].cells
+    clean = WordDocument(BytesIO(clean_response.content)).tables[0].rows[1].cells
+    assert [c.text for c in marked] == [c.text for c in clean]
+    assert marked[2].text == "Ручная правка"
+    assert any(r.bold for r in marked[2].paragraphs[0].runs)
+    assert not any(r.bold for r in clean[2].paragraphs[0].runs)
+
+
+@pytest.mark.parametrize("style", [{"color": "invalid"}, {"highlight": "invalid"}])
+def test_export_rejects_invalid_colors(ready_doc, style):
+    doc, _ = ready_doc
+    with TestClient(app, base_url="http://localhost") as client:
+        response = client.post(f"/api/documents/{doc.id}/protocol/export", json={
+            "filename": "Протокол", "highlighting": {"enabled": True, "additions": style},
+        })
+    assert response.status_code == 422
+
+
+def test_unbounded_diff_reports_actionable_error_but_clean_export_works(ready_doc):
+    doc, db = ready_doc
+    with TestClient(app, base_url="http://localhost") as client:
+        client.post(f"/api/documents/{doc.id}/protocol")
+        db.rows[0].party_1_text = "а " * 3000
+        db.rows[0].party_2_text = "б " * 3000 + "в"
+        response = client.post(f"/api/documents/{doc.id}/protocol/export", json={
+            "filename": "Протокол", "highlighting": {"enabled": True},
+        })
+        assert response.status_code == 422
+        assert "выключите выделение" in response.json()["detail"]
+        assert client.post(f"/api/documents/{doc.id}/protocol/export", json={"filename": "Чистый"}).status_code == 200

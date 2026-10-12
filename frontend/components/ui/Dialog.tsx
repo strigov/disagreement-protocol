@@ -4,10 +4,11 @@ import { IconButton } from "./Button";
 
 // Смонтирован = открыт. Нативный <dialog> даёт focus trap и Esc без зависимостей.
 export function Dialog({
-  title, description, onClose, dismissible = true, closeLabel = "Закрыть", children, className,
+  title, description, onClose, dismissible = true, closeLabel = "Закрыть", children, className, size = "md",
 }: {
   title: ReactNode; description?: ReactNode; onClose: () => void;
   dismissible?: boolean; closeLabel?: string; children: ReactNode; className?: string;
+  size?: "md" | "wide";
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
@@ -26,7 +27,7 @@ export function Dialog({
       aria-describedby={description ? descriptionId : undefined}
       aria-modal="true"
       onCancel={(event) => { event.preventDefault(); if (dismissible) onClose(); }}
-      className={cn("w-full max-w-md rounded-lg border border-line-c bg-bg-elev p-0 text-ink shadow-md max-sm:max-w-none", className)}
+      className={cn("w-full rounded-lg border border-line-c bg-bg-elev p-0 text-ink shadow-md max-sm:max-w-none", size === "wide" ? "max-w-3xl" : "max-w-md", className)}
     >
       <div className="flex items-start justify-between gap-4 px-6 pt-5">
         <div className="min-w-0">

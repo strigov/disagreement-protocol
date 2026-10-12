@@ -3,6 +3,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from app.schemas.protocol_form import ProtocolForm
+from app.schemas.export_style import ChangeHighlighting
 
 
 class ProtocolRowOut(BaseModel):
@@ -42,3 +43,4 @@ class ProtocolRowCreate(BaseModel):
 
 class ExportRequest(BaseModel):
     filename: str
+    highlighting: ChangeHighlighting | None = None

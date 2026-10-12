@@ -1,5 +1,7 @@
 import Link from "@/lib/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { ExportSettingsDialog } from "@/components/ExportSettingsDialog";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { Icon } from "@/components/icons/Icon";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
@@ -15,6 +17,7 @@ interface Props {
 const STEPS = ["Документ", "Стороны", "Проверка протокола"] as const;
 
 export function WorkspaceShell({ children, step = 1, documentId, wide, onNavigate }: Props) {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const navigate = (href: string, content: ReactNode, className?: string) => onNavigate
     ? <button type="button" className={className} onClick={() => onNavigate(href)}>{content}</button>
     : <Link className={className} href={href}>{content}</Link>;
@@ -27,6 +30,7 @@ export function WorkspaceShell({ children, step = 1, documentId, wide, onNavigat
             <span className="font-serif text-sm leading-tight text-ink-2">{"It's just Strigov's"}</span>
           </>, "-mx-2 flex min-w-0 flex-col items-start gap-0.5 rounded-sm px-2 py-1 text-left transition-colors hover:bg-bg-hover")}
           <div className="flex shrink-0 items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setSettingsOpen(true)}>Настройки</Button>
             <ThemeToggle />
           </div>
         </div>
@@ -65,6 +69,7 @@ export function WorkspaceShell({ children, step = 1, documentId, wide, onNavigat
         : "mx-auto max-w-4xl px-4 py-10 md:px-8 md:py-14")}>
         {children}
       </main>
+      {settingsOpen && <ExportSettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

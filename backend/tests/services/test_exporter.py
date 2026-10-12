@@ -47,3 +47,67 @@ def test_export_falls_back_to_storona_labels_for_empty_roles():
     headers = [c.text for c in doc.tables[0].rows[0].cells]
     assert headers[1] == "Редакция Стороны 1"
     assert headers[2] == "Редакция Стороны 2"
+
+
+def export_row(before, after, settings=None):
+    from app.schemas.export_style import ChangeHighlighting
+    data = ProtocolExporter().export(
+        [{"point_label": "1.", "party_1_text": before, "party_2_text": after, "agreed_text": "Согласовано"}],
+        "Покупатель", "Продавец", "Договор",
+        highlighting=ChangeHighlighting.model_validate(settings) if settings is not None else None,
+    )
+    return Document(BytesIO(data)).tables[0].rows[1].cells
+
+
+def test_highlights_only_changes_and_preserves_text():
+    before, after = "Срок — 10 дней.\nЦена:\t100 рублей.", "Срок — 15 дней.\nЦена:\t100 рублей."
+    cells = export_row(before, after, {"enabled": True})
+    assert [cell.text for cell in cells] == ["1.", before, after, "Согласовано"]
+    for cell, text, color in [(cells[1], "10", "FF0000"), (cells[2], "15", "00B050")]:
+        marked = [r for p in cell.paragraphs for r in p.runs if r.font.color.rgb]
+        assert [(r.text, str(r.font.color.rgb)) for r in marked] == [(text, color)]
+    for cell in (cells[0], cells[3]):
+        assert all(r.font.color.rgb is None for p in cell.paragraphs for r in p.runs)
+
+
+def test_combines_all_styles_and_keeps_them_out_of_clean_version():
+    style = {"color": "7030A0", "highlight": "cyan", "bold": True, "italic": True, "underline": True}
+    settings = {"enabled": True, "deletions": {**style, "strike": True}, "additions": style}
+    cells = export_row("старое", "новое", settings)
+    for index in (1, 2):
+        run = next(r for r in cells[index].paragraphs[0].runs if r.text)
+        assert run.bold and run.italic and run.underline
+        assert run.font.strike == (index == 1)
+        assert str(run.font.color.rgb) == "7030A0"
+        assert run._r.xpath("./w:rPr/w:highlight/@w:val") == ["cyan"]
+    clean = export_row("старое", "новое", {**settings, "enabled": False})
+    assert [c.text for c in cells] == [c.text for c in clean]
+    for cell in clean:
+        for run in cell.paragraphs[0].runs:
+            assert not any((run.bold, run.italic, run.underline, run.font.strike, run.font.color.rgb, run.font.highlight_color))
+
+
+def test_single_style_without_color():
+    cells = export_row("старое", "новое", {
+        "enabled": True, "deletions": {"color": None, "strike": True},
+        "additions": {"color": None, "underline": True},
+    })
+    for index in (1, 2):
+        run = next(r for r in cells[index].paragraphs[0].runs if r.text)
+        assert run.font.color.rgb is None
+        assert not run.bold and not run.italic
+    assert cells[1].paragraphs[0].runs[-1].font.strike
+    assert cells[2].paragraphs[0].runs[-1].underline
+
+
+def test_empty_identical_and_repeated_editions():
+    from app.services.export_diff import edition_segments
+    for before, after in [("", "Новый пункт"), ("Удалённый пункт", ""), ("", ""), ("без изменений", "без изменений"), ("да, да; да.", "да, нет; да.")]:
+        old, new = edition_segments(before, after)
+        assert "".join(text for text, _ in old) == before
+        assert "".join(text for text, _ in new) == after
+        if before == after:
+            assert not any(changed for _, changed in old + new)
+    old, new = edition_segments("да " * 5000 + "нет", "да " * 5000 + "точно")
+    assert [(text, changed) for text, changed in old if changed] == [("нет", True)]
+    assert [(text, changed) for text, changed in new if changed] == [("точно", True)]
