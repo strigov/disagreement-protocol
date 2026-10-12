@@ -26,7 +26,8 @@ export function Dialog({
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       aria-modal="true"
-      onCancel={(event) => { event.preventDefault(); if (dismissible) onClose(); }}
+      // React пробрасывает cancel вложенного диалога родителю: Esc закрывает только верхний.
+      onCancel={(event) => { event.preventDefault(); event.stopPropagation(); if (dismissible) onClose(); }}
       className={cn("w-full rounded-lg border border-line-c bg-bg-elev p-0 text-ink shadow-md max-sm:max-w-none", size === "wide" ? "max-w-3xl" : "max-w-md", className)}
     >
       <div className="flex items-start justify-between gap-4 px-6 pt-5">

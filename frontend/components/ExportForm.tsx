@@ -24,8 +24,9 @@ export function ExportForm({ documentId, contractName, rowCount, onBusyChange }:
   const [alsoClean, setAlsoClean] = useState(false);
   const [storageError, setStorageError] = useState(false);
   const cleaned = sanitize(filename);
-  const names = settings.enabled
-    ? [`${cleaned} — с выделением изменений`, ...(alsoClean ? [`${cleaned} — без выделения изменений`] : [])]
+  // Суффиксы различают файлы только тогда, когда сохраняются обе версии.
+  const names = settings.enabled && alsoClean
+    ? [`${cleaned} — с выделением изменений`, `${cleaned} — без выделения изменений`]
     : [cleaned];
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();

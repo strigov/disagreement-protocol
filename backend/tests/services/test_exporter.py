@@ -111,3 +111,31 @@ def test_empty_identical_and_repeated_editions():
     old, new = edition_segments("да " * 5000 + "нет", "да " * 5000 + "точно")
     assert [(text, changed) for text, changed in old if changed] == [("нет", True)]
     assert [(text, changed) for text, changed in new if changed] == [("точно", True)]
+
+
+def test_service_texts_of_new_and_excluded_clauses_are_not_redlined():
+    from app.services.export_diff import edition_segments
+    from app.services.protocol_generator import ABSENT_EDITION, deletion_instruction
+    original = "3.2. Поставщик вправе изменить цену, как указано в пункте 3.1."
+    assert edition_segments(original, deletion_instruction("3.2."), "3.2.") == (
+        [(original, True)], [(deletion_instruction("3.2."), False)],
+    )
+    assert edition_segments(ABSENT_EDITION, "Новая редакция", "Новый пункт 1") == (
+        [(ABSENT_EDITION, False)], [("Новая редакция", True)],
+    )
+    # A manually rewritten instruction is ordinary wording again.
+    old, new = edition_segments(original, "Исключить пункт 3.2 и пункт 3.1", "3.2.")
+    assert any(changed for _, changed in new)
+
+
+def test_redline_is_continuous_and_ignores_whitespace_only_edits():
+    from app.services.export_diff import edition_segments
+    old, new = edition_segments("Покупатель обязан оплатить товар.", "Продавец вправе потребовать оплату.")
+    assert old == [("Покупатель обязан оплатить товар", True), (".", False)]
+    assert new == [("Продавец вправе потребовать оплату", True), (".", False)]
+    for before, after in [("срок 10 дней", "срок  10 дней"), ("срок 10 дней", "срок\n10 дней")]:
+        old, new = edition_segments(before, after)
+        assert not any(changed for _, changed in old + new)
+        assert "".join(t for t, _ in old) == before and "".join(t for t, _ in new) == after
+    old, _ = edition_segments("оплата в течение 10 дней", "оплата в течение 15 рабочих дней")
+    assert old == [("оплата в течение ", False), ("10", True), (" дней", False)]

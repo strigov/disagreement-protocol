@@ -70,7 +70,7 @@ class ProtocolExporter:
         headers = [form.point_title, form.original_title, form.proposed_title, form.agreed_title]
         values = [headers, *[[row[key] for key in ("point_label", "party_1_text", "party_2_text", "agreed_text")] for row in rows]]
         for index, values_row in enumerate(values):
-            segments = edition_segments(values_row[1], values_row[2]) if index and highlighting and highlighting.enabled else None
+            segments = edition_segments(values_row[1], values_row[2], values_row[0]) if index and highlighting and highlighting.enabled else None
             for column, (cell, text, width) in enumerate(zip(table.rows[index].cells, values_row, widths)):
                 cell.width = width
                 if segments is not None and column in (1, 2):

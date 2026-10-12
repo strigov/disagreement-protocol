@@ -1,8 +1,9 @@
-import { cleanup, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { render } from "./render";
 import { ExportSettingsDialog } from "@/components/ExportSettingsDialog";
 import { ExportForm } from "@/components/ExportForm";
+import { ExportDialog } from "@/components/ExportDialog";
 import { DEFAULT_EXPORT_SETTINGS, EXPORT_SETTINGS_KEY, writeExportSettings } from "@/lib/export-settings";
 import { api } from "@/lib/api";
 
@@ -70,4 +71,29 @@ test("a failed clean export does not start partial downloads and allows retry", 
   expect(await screen.findByRole("alert")).toHaveTextContent("Ошибка чистой версии");
   expect(download).not.toHaveBeenCalled();
   expect(screen.getByRole("button", { name: "Сохранить" })).toBeEnabled();
+});
+
+test("a single highlighted export keeps the plain file name", async () => {
+  writeExportSettings({ ...DEFAULT_EXPORT_SETTINGS, enabled: true });
+  URL.createObjectURL = vi.fn(() => "blob:test");
+  URL.revokeObjectURL = vi.fn();
+  const downloads: string[] = [];
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { downloads.push(this.download); });
+  const exportSpy = vi.spyOn(api, "exportProtocol").mockResolvedValue(new Blob(["docx"]));
+  render(<ExportForm documentId="doc1" />);
+  await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+  await screen.findByRole("status");
+  expect(downloads).toEqual(["Протокол разногласий.docx"]);
+  expect(exportSpy).toHaveBeenCalledExactlyOnceWith("doc1", "Протокол разногласий", { ...DEFAULT_EXPORT_SETTINGS, enabled: true });
+});
+
+test("Esc in the highlighting settings closes only the settings dialog", async () => {
+  const onClose = vi.fn();
+  render(<ExportDialog documentId="doc1" rowCount={1} onClose={onClose} />);
+  await userEvent.click(screen.getByRole("button", { name: "Настроить выделение" }));
+  const dialogs = document.querySelectorAll("dialog");
+  expect(dialogs).toHaveLength(2);
+  fireEvent(dialogs[1], new Event("cancel", { cancelable: true }));
+  expect(document.querySelectorAll("dialog")).toHaveLength(1);
+  expect(onClose).not.toHaveBeenCalled();
 });
