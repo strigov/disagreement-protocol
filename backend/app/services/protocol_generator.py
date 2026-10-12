@@ -45,6 +45,15 @@ _GENITIVE_RULES = {
 }
 
 
+# Service texts that stand in for a missing edition; the exporter must not
+# redline them as if they were contract wording.
+ABSENT_EDITION = "—"
+
+
+def deletion_instruction(label: str) -> str:
+    return f"Исключить пункт {label}"
+
+
 def edition_label(role: str, empty_fallback: str) -> str:
     normalized_role = (role or "").strip()
     if not normalized_role:
@@ -86,7 +95,7 @@ class ProtocolRowBuilder:
                 rows.append(
                     BuiltRow(
                         point_label=point_label,
-                        party_1_text="—",
+                        party_1_text=ABSENT_EDITION,
                         party_2_text=accepted,
                         agreed_text=agreed,
                         source_clause_key=clause.clause_key,
@@ -101,7 +110,7 @@ class ProtocolRowBuilder:
                     BuiltRow(
                         point_label=clause.label,
                         party_1_text=original,
-                        party_2_text=f"Исключить пункт {clause.label}",
+                        party_2_text=deletion_instruction(clause.label),
                         agreed_text=agreed,
                         source_clause_key=clause.clause_key,
                         confidence=self._confidence(clause),

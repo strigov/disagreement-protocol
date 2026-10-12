@@ -123,11 +123,11 @@ export const api = {
       method: "POST",
     })),
 
-  exportProtocol: async (documentId: UUID, filename: string): Promise<Blob> => {
+  exportProtocol: async (documentId: UUID, filename: string, highlighting?: import("./export-settings").ExportSettings): Promise<Blob> => {
     const r = await fetch(`${BASE}/api/documents/${documentId}/protocol/export`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ filename }),
+      body: JSON.stringify({ filename, ...(highlighting?.enabled ? { highlighting } : {}) }),
     });
     if (!r.ok) await throwApiError(r);
     return r.blob();

@@ -100,6 +100,8 @@
    Концепт «Бюро» — light (дословно strigov-crm)
    ============================================================ */
 [data-concept='buro'][data-theme='light'] {
+  --paper: #ffffff;
+  --paper-ink: #000000;
   color-scheme: light;
   --bg: #faf6ee;
   --bg-elev: #ffffff;
@@ -134,6 +136,8 @@
    Концепт «Бюро» — dark (дословно strigov-crm)
    ============================================================ */
 [data-concept='buro'][data-theme='dark'] {
+  --paper: #ffffff;
+  --paper-ink: #000000;
   color-scheme: dark;
   --bg: #1c1814;
   --bg-elev: #25211a;

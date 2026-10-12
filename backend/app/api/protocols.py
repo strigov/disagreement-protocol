@@ -19,6 +19,7 @@ from app.schemas.protocol import ExportRequest, ProtocolOut, ProtocolRowCreate, 
 from app.schemas.protocol_form import ProtocolForm, ProtocolFormPatch
 from app.services.protocol_form import apply_form_patch, resolve_form
 from app.services.exporter import ProtocolExporter
+from app.services.export_diff import ExportHighlightError
 from app.services.protocol_generator import BuildContext, ProtocolRowBuilder
 from app.services.clause_codec import restore_clause
 from app.services.storage import FileStorage
@@ -334,10 +335,14 @@ def export_protocol(
         for row in rows
     ]
     refresh_validation(db, doc, rows)
-    data = ProtocolExporter().export(
-        payload_rows, drafting.role, counterparty.role, doc.contract_name,
-        form=resolve_form(protocol, doc, parties), drafting_party_id=str(drafting.id),
-    )
+    try:
+        data = ProtocolExporter().export(
+            payload_rows, drafting.role, counterparty.role, doc.contract_name,
+            form=resolve_form(protocol, doc, parties), drafting_party_id=str(drafting.id),
+            highlighting=payload.highlighting,
+        )
+    except ExportHighlightError as exc:
+        raise HTTPException(422, str(exc)) from exc
     name = _sanitize_filename(payload.filename)
     ascii_name = _ascii_fallback(name) + ".docx"
     utf8_name = urllib.parse.quote(name + ".docx", safe="")

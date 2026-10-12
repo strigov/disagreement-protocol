@@ -6,8 +6,11 @@ from docx import Document as DocxDocument
 from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
 from docx.oxml import OxmlElement
-from docx.shared import Cm, Pt
+from docx.shared import Cm, Pt, RGBColor
+from docx.oxml.ns import qn
 
+from app.schemas.export_style import ChangeHighlighting
+from app.services.export_diff import edition_segments
 from app.schemas.protocol_form import ProtocolForm
 from app.services.protocol_form import CLOSING_TEXT
 from app.services.protocol_generator import edition_label
@@ -23,6 +26,7 @@ class ProtocolExporter:
         *,
         form: ProtocolForm | None = None,
         drafting_party_id: str | None = None,
+        highlighting: ChangeHighlighting | None = None,
     ) -> bytes:
         form = form or ProtocolForm(
             contract_reference=contract_name or "",
@@ -66,14 +70,31 @@ class ProtocolExporter:
         headers = [form.point_title, form.original_title, form.proposed_title, form.agreed_title]
         values = [headers, *[[row[key] for key in ("point_label", "party_1_text", "party_2_text", "agreed_text")] for row in rows]]
         for index, values_row in enumerate(values):
-            for cell, text, width in zip(table.rows[index].cells, values_row, widths):
+            segments = edition_segments(values_row[1], values_row[2], values_row[0]) if index and highlighting and highlighting.enabled else None
+            for column, (cell, text, width) in enumerate(zip(table.rows[index].cells, values_row, widths)):
                 cell.width = width
-                cell.text = text
+                if segments is not None and column in (1, 2):
+                    style = highlighting.deletions if column == 1 else highlighting.additions
+                    cell.text = ""
+                    for fragment, changed in segments[column - 1]:
+                        run = cell.paragraphs[0].add_run(fragment)
+                        if changed:
+                            if style.color:
+                                run.font.color.rgb = RGBColor.from_string(style.color)
+                            if style.highlight:
+                                marker = OxmlElement("w:highlight")
+                                marker.set(qn("w:val"), style.highlight)
+                                run._r.get_or_add_rPr().append(marker)
+                            run.bold, run.italic, run.underline = style.bold, style.italic, style.underline
+                            run.font.strike = getattr(style, "strike", False)
+                else:
+                    cell.text = text
                 for paragraph in cell.paragraphs:
                     paragraph.paragraph_format.space_after = Pt(4)
                     for run in paragraph.runs:
                         run.font.name, run.font.size = "Times New Roman", Pt(11)
-                        run.bold = index == 0
+                        if index == 0:
+                            run.bold = True
 
         doc.add_paragraph()
         for text in form.closing_text.splitlines():

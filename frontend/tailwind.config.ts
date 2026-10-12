@@ -7,6 +7,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        paper: "var(--paper)",
+        "paper-ink": "var(--paper-ink)",
         bg: "var(--bg)",
         "bg-elev": "var(--bg-elev)",
         "bg-sunk": "var(--bg-sunk)",
