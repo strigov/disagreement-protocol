@@ -533,7 +533,21 @@ def test_regex_numbering_obeys_cumulative_rendered_output_budget():
     assert sum(map(len, rendered)) <= 1_000_000
 
 
-def test_oversized_lvl_text_is_rejected_before_repeated_scan():
+def test_oversized_lvl_text_is_rejected_before_repeated_scan(monkeypatch):
+    real_placeholder = numbering_resolver._PLACEHOLDER
+    scanned_lengths = []
+
+    class RecordingPlaceholder:
+        def finditer(self, text):
+            scanned_lengths.append(len(text))
+            return real_placeholder.finditer(text)
+
+    monkeypatch.setattr(numbering_resolver, "_PLACEHOLDER", RecordingPlaceholder())
+    # Verify that the probe observes normal rendering before testing early rejection.
+    assert NumberingResolver._render_level_text({}, {}, "%1.", 4_096) == "1."
+    assert scanned_lengths == [3]
+    scanned_lengths.clear()
+
     lvl_text = "%x" * 35_000
     numbering = f"""<w:numbering xmlns:w="{W_NS}">
       <w:abstractNum w:abstractNumId="0">
@@ -547,13 +561,13 @@ def test_oversized_lvl_text_is_rejected_before_repeated_scan():
     )
     with zipfile.ZipFile(BytesIO(data)) as package:
         source_size = package.getinfo("word/numbering.xml").file_size
-    started = time.perf_counter()
     numbers, _ = _resolve(data)
-    elapsed = time.perf_counter() - started
 
     assert len(lvl_text) > 65_536
     assert 65_536 < source_size < 5_000_000
-    assert elapsed < 1.0
+    # Check the costly operation directly; wall time depends on the runner's CPU.
+    assert scanned_lengths == []
+    assert len(numbers) == 10_000
     assert all(number.rendered_number is None for number in numbers)
 
 
