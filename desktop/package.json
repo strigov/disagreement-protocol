@@ -4,6 +4,7 @@
   "private": true,
   "description": "Локальное приложение для протоколов разногласий из договоров Word",
   "author": "strigov",
+  "license": "MIT",
   "main": "src/main.cjs",
   "scripts": {
     "start": "electron .",

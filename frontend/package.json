@@ -2,6 +2,7 @@
   "name": "disprot-frontend",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "scripts": {
     "build": "vite build",
     "lint": "eslint . --max-warnings 0",

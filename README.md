@@ -128,3 +128,7 @@
 | Windows | `%APPDATA%\DisagreementProtocol` |
 
 На Mac путь можно вставить в Finder через **Переход → Переход к папке…**; на Windows — в адресную строку Проводника. Перед обновлением приложения сохраните резервную копию.
+
+## Лицензия
+
+Код распространяется по лицензии [MIT](LICENSE). Шрифты в `frontend/public/fonts` распространяются по лицензии SIL OFL 1.1 — см. [`OFL.txt`](frontend/public/fonts/OFL.txt).
