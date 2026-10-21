@@ -52,7 +52,6 @@
    | Ваш Mac | Файл установщика |
    | :--- | :--- |
    | С чипом Apple M1, M2, M3, M4 и другими чипами серии M | `DisagreementProtocol-<версия>-mac-arm64.dmg` |
-   | С процессором Intel | `DisagreementProtocol-<версия>-mac-x64.dmg` |
 
    Тип процессора указан в меню ** → Об этом Mac**.
 
