@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1280" height="400" viewBox="0 0 1280 400" fill="none">
-  <title>Протокол разногласий</title>
+  <title>Strigov — Протокол разногласий</title>
   <desc>Обложка в стиле Бюро: тёплая бумага, янтарный акцент и схема таблицы с редакциями договора.</desc>
   <rect width="1280" height="400" rx="16" fill="#FAF6EE"/>
   <rect x="1" y="1" width="1278" height="398" rx="15" stroke="#E5DCCB"/>
   <path d="M56 62H92" stroke="#A86A1F" stroke-width="3"/>
-  <text x="108" y="68" font-family="Arial, sans-serif" font-size="13" letter-spacing="3" fill="#7A6E5E">БЮРО / ИНСТРУМЕНТЫ ДЛЯ ДОГОВОРОВ</text>
+  <text x="108" y="68" font-family="Arial, sans-serif" font-size="13" letter-spacing="3" fill="#7A6E5E">STRIGOV / ИНСТРУМЕНТЫ ДЛЯ ДОГОВОРОВ</text>
   <text x="56" y="158" font-family="Georgia, 'Times New Roman', serif" font-size="60" fill="#28201A">Протокол</text>
   <text x="56" y="222" font-family="Georgia, 'Times New Roman', serif" font-size="60" fill="#28201A">разногласий</text>
   <text x="59" y="271" font-family="Arial, sans-serif" font-size="18" fill="#7A6E5E">От правок в договоре к документу для согласования.</text>

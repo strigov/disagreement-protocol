@@ -19,8 +19,8 @@
   },
   "build": {
     "appId": "com.strigov.disagreement-protocol",
-    "productName": "Протокол разногласий",
-    "artifactName": "DisagreementProtocol-${version}-${os}-${arch}.${ext}",
+    "productName": "Strigov — Протокол разногласий",
+    "artifactName": "Strigov-DisagreementProtocol-${version}-${os}-${arch}.${ext}",
     "directories": { "output": "dist" },
     "files": ["src/**", "package.json"],
     "extraResources": [
@@ -40,7 +40,7 @@
     },
     "win": { "target": ["nsis", "portable"], "icon": "build/icon.ico" },
     "portable": {
-      "artifactName": "DisagreementProtocol-${version}-${os}-${arch}-Portable.${ext}"
+      "artifactName": "Strigov-DisagreementProtocol-${version}-${os}-${arch}-Portable.${ext}"
     },
     "nsis": {
       "oneClick": false,

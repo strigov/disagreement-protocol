@@ -64,9 +64,20 @@ jobs:
       - name: Package preview installer (no publishing)
         run: npx electron-builder --publish never
         working-directory: desktop
+      - name: Resolve artifact name
+        id: artifact
+        working-directory: desktop
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { appendFileSync } = require('node:fs');
+          const { version } = require('./package.json');
+          const os = process.platform === 'darwin' ? 'mac' : 'win';
+          appendFileSync(process.env.GITHUB_OUTPUT, `name=Strigov-DisagreementProtocol-${version}-${os}-${process.arch}\n`);
+          NODE
       - uses: actions/upload-artifact@v4
         with:
-          name: DisagreementProtocol-${{ matrix.platform }}
+          name: ${{ steps.artifact.outputs.name }}
           path: |
             desktop/dist/*.exe
             desktop/dist/*.dmg

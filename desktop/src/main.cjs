@@ -4,9 +4,12 @@ const { mkdir } = require('node:fs/promises');
 const { Engine } = require('./engine.cjs');
 const { APP_ORIGIN, isAppURL, createRequestHandler } = require('./request-handler.cjs');
 
-app.setName('DisagreementProtocol');
-// Tests and developer runs can use an isolated profile; normal installs use the OS default.
-if (process.env.DISPROT_USER_DATA) app.setPath('userData', path.resolve(process.env.DISPROT_USER_DATA));
+app.setName('Strigov — Протокол разногласий');
+// Keep existing documents and renderer storage when the visible product name changes.
+// Tests and developer runs can still use an isolated profile.
+app.setPath('userData', process.env.DISPROT_USER_DATA
+  ? path.resolve(process.env.DISPROT_USER_DATA)
+  : path.join(app.getPath('appData'), 'DisagreementProtocol'));
 protocol.registerSchemesAsPrivileged([{ scheme: 'disprot', privileges: {
   standard: true, secure: true, supportFetchAPI: true, corsEnabled: true,
 } }]);
@@ -49,7 +52,7 @@ else {
     session.defaultSession.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] }, (_details, callback) => callback({ cancel: true }));
     window = new BrowserWindow({
       width: 1320, height: 900, minWidth: 800, minHeight: 600,
-      title: 'Протокол разногласий', backgroundColor: '#f7f8fc', show: false,
+      title: 'Strigov — Протокол разногласий', backgroundColor: '#f7f8fc', show: false,
       webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webviewTag: false, spellcheck: false },
     });
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -70,11 +73,11 @@ else {
       });
     });
     const about = () => dialog.showMessageBox(window, {
-      type: 'info', title: 'О приложении', message: 'Протокол разногласий',
+      type: 'info', title: 'О приложении', message: 'Strigov — Протокол разногласий',
       detail: `Версия ${app.getVersion()}`,
     });
     Menu.setApplicationMenu(Menu.buildFromTemplate([
-      ...(process.platform === 'darwin' ? [{ label: 'Протокол', submenu: [{ label: 'О приложении', click: about }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit', label: 'Завершить' }] }] : []),
+      ...(process.platform === 'darwin' ? [{ label: 'Strigov', submenu: [{ label: 'О приложении', click: about }, { type: 'separator' }, { role: 'hide', label: 'Скрыть Strigov' }, { role: 'hideOthers' }, { type: 'separator' }, { role: 'quit', label: 'Завершить' }] }] : []),
       { label: 'Файл', submenu: [{ label: 'Открыть папку данных', click: () => shell.openPath(dataDir) }, { type: 'separator' }, { role: 'close', label: 'Закрыть' }] },
       { label: 'Правка', submenu: [{ role: 'undo', label: 'Отменить' }, { role: 'redo', label: 'Повторить' }, { type: 'separator' }, { role: 'cut', label: 'Вырезать' }, { role: 'copy', label: 'Копировать' }, { role: 'paste', label: 'Вставить' }, { role: 'selectAll', label: 'Выделить всё' }] },
       { label: 'Вид', submenu: [{ role: 'resetZoom', label: 'Исходный масштаб' }, { role: 'zoomIn', label: 'Увеличить' }, { role: 'zoomOut', label: 'Уменьшить' }] },
