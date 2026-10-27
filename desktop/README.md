@@ -1,15 +1,15 @@
-# Настольное приложение
+# Strigov — Протокол разногласий
 
 Приложение запускается только в собственном окне Electron на Windows и macOS. React-интерфейс собирается Vite, Python-движок упакован PyInstaller и входит в установщик; пользователю не нужны Python, Node.js или сервер. Обработка договора и экспорт работают локально.
 
 ## Установка
 
-- Windows x64: установщик `DisagreementProtocol-<версия>-win-x64.exe`.
-- Windows x64 без установки: один файл `DisagreementProtocol-<версия>-win-x64-Portable.exe`.
-- Mac с Apple Silicon: `DisagreementProtocol-<версия>-mac-arm64.dmg`.
-- Mac с Intel: `DisagreementProtocol-<версия>-mac-x64.dmg`.
+- Windows x64: установщик `Strigov-DisagreementProtocol-<версия>-win-x64.exe`.
+- Windows x64 без установки: один файл `Strigov-DisagreementProtocol-<версия>-win-x64-Portable.exe`.
+- Mac с Apple Silicon: `Strigov-DisagreementProtocol-<версия>-mac-arm64.dmg`.
+- Mac с Intel: `Strigov-DisagreementProtocol-<версия>-mac-x64.dmg`.
 
-На Mac откройте DMG и перенесите приложение в Applications. Это пока предварительные сборки без подписи издателя: Windows и macOS могут предупреждать о неизвестном разработчике или блокировать запуск. Для публичного выпуска нужны отдельная настройка подписи Windows и подпись Developer ID с notarization Apple. Текущий workflow создаёт неподписанные установщики и ничего не публикует.
+На Mac откройте DMG и перенесите «Strigov — Протокол разногласий» в Applications. Это пока предварительные сборки без подписи издателя: Windows и macOS могут предупреждать о неизвестном разработчике или блокировать запуск. Для публичного выпуска нужны отдельная настройка подписи Windows и подпись Developer ID с notarization Apple. Текущий workflow создаёт неподписанные установщики и ничего не публикует.
 
 Mac-пакет получает техническую ad-hoc подпись (`identity: "-"`), необходимую для корректного локального запуска. Она не удостоверяет издателя. При настройке Developer ID нужно заменить `mac.identity`, подписать Python-движок через `DISPROT_SIGN_IDENTITY` и повторно проверить entitlements и notarization; текущая конфигурация предназначена для предварительных сборок.
 
