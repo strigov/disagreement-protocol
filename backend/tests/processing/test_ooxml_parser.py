@@ -65,3 +65,28 @@ def test_parse_ignores_comments_and_processing_instructions_everywhere():
     ]
     table = next(block for block in doc.blocks if isinstance(block, RawTable))
     assert table.rows[0].cells[0].text() == "До cell после cell"
+
+
+def test_parse_accepts_default_namespace_declared_by_google_docs_export():
+    """Google Docs exports put xmlns="...documenttasks" on every part's root."""
+    import re
+    import zipfile
+    from io import BytesIO
+
+    source = build_simple_docx(["Пункт из Google Docs"])
+    out = BytesIO()
+    with zipfile.ZipFile(BytesIO(source)) as src, zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as dst:
+        for info in src.infolist():
+            data = src.read(info.filename)
+            if info.filename == "word/document.xml":
+                data = re.sub(
+                    rb"<w:document\b",
+                    b'<w:document xmlns="http://schemas.microsoft.com/office/tasks/2019/documenttasks"',
+                    data,
+                    count=1,
+                )
+            dst.writestr(info.filename, data)
+
+    doc = OOXMLParser().parse(out.getvalue())
+    paragraphs = [b for b in doc.blocks if isinstance(b, RawParagraph)]
+    assert [p.text() for p in paragraphs] == ["Пункт из Google Docs"]

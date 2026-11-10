@@ -92,6 +92,11 @@ class _LimitedTreeBuilder(etree.TreeBuilder):
         self.package.nodes += 1 + len(attrs) + len(nsmap or {})
         if self.depth > MAX_XML_DEPTH or self.package.nodes > MAX_XML_NODES:
             self._reject("Документ превышает лимит сложности XML", 413)
+        if nsmap and "" in nsmap:
+            # The SAX target interface reports a default namespace under "",
+            # but TreeBuilder.start only accepts None for it. Google Docs
+            # exports declare xmlns="..." on the root of every part.
+            nsmap = {(prefix or None): uri for prefix, uri in nsmap.items()}
         return super().start(tag, attrs, nsmap)
 
     def _count_misc_node(self):
